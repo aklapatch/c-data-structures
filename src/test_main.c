@@ -1,9 +1,7 @@
-#include "c_dynarr_hm.h"
+#include "dynarr.h"
 #include <stdio.h>
 #include <assert.h>
 
-
-#define ERROR_HERE printf("ERROR! %u\n", __LINE__);
 // I need to do something to handle errors
 // I can return NULL from the realloc functions , but then the user has to catch the error, and I can't think of a way to do that whithout making temp variables that pollute the name space.
 // I could say that you have to make a new ptr to get stuff, but then it will lose memory if the previous function fails.
@@ -28,7 +26,7 @@ void print_dynarr(void * ptr){
         printf("Testing: (%s)", #expression);\
         assert(expression);\
         printf(": ok\n\n");\
-    } while(0);
+    } while(0)
 
 int main(){
 
