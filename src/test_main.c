@@ -28,6 +28,18 @@ void print_dynarr(void * ptr){
         printf(": ok\n\n");\
     } while(0)
 
+#define TESTERRSUCCESS(message, ptr)\
+    do{\
+        TEST(message " err val check", get_dynarr_err(ptr) == ds_success);\
+        TEST(message " err set check", !dynarr_is_err_set(ptr));\
+    }while (0)
+
+#define TESTERRFAIL(message, ptr, err_val)\
+    do{\
+        TEST(message " err val check", get_dynarr_err(ptr) == err_val);\
+        TEST(message " err set check", dynarr_is_err_set(ptr));\
+    }while (0)
+
 int main(){
 
     uint8_t *ptr = NULL;
@@ -38,39 +50,48 @@ int main(){
     TEST("dynarr_alloc()", get_dynarr_cap(ptr) == 7);
     TEST("dynarr_alloc() memset", memset(ptr, 0, get_dynarr_cap(ptr)));
     TEST("dynarr_alloc() len", get_dynarr_len(ptr) == 0);
+    TESTERRSUCCESS("dynarr_alloc()", ptr);
 
     dynarr_set_cap(ptr, 17);
     TEST("dynarr_set_cap()", get_dynarr_cap(ptr) == 17);
     TEST("dynarr_set_cap() memset", memset(ptr, 0, get_dynarr_cap(ptr)));
+    TESTERRSUCCESS("dynarr_set_cap()", ptr);
 
     dynarr_set_len(ptr, 30);
     TEST("dynarr_set_len()", get_dynarr_len(ptr) == 30);
     TEST("dynarr_set_len()", get_dynarr_cap(ptr) == 30);
     TEST("dynarr_set_len() memset", memset(ptr, 0, get_dynarr_len(ptr)));
+    TESTERRSUCCESS("dynarr_set_len()", ptr);
 
     dynarr_set_len(ptr, 0);
     TEST("dynarr_set_len()", get_dynarr_len(ptr) == 0);
     TEST("dynarr_set_len()", get_dynarr_cap(ptr) == 30);
+    TESTERRSUCCESS("dynarr_set_len()", ptr);
  
     dynarr_maybe_grow(ptr, 32);
     TEST("dynarr_maybe_grow()", get_dynarr_cap(ptr) >= 32);
+    TESTERRSUCCESS("dynarr_maybe_grow()", ptr);
 
     uintptr_t old_cap = get_dynarr_cap(ptr);
     dynarr_maybe_grow(ptr, 32);
     TEST("dynarr_maybe_grow()", old_cap == get_dynarr_cap(ptr));
+    TESTERRSUCCESS("dynarr_maybe_grow()", ptr);
 
     dynarr_append(ptr, 72);
     TEST("dynarr_append()", ptr[get_dynarr_len(ptr) - 1] == 72);
     TEST("dynarr_append()", get_dynarr_len(ptr) == 1);
+    TESTERRSUCCESS("dynarr_append()", ptr);
 
     uintptr_t pre_pop_len = get_dynarr_len(ptr);
     dynarr_pop(ptr);
     TEST("dynarr_pop()", get_dynarr_len(ptr) == pre_pop_len -1);
+    TESTERRSUCCESS("dynarr_pop()", ptr);
 
     uintptr_t pre_append_len = get_dynarr_len(ptr);
     dynarr_append(ptr, 64);
     TEST("dynarr_append()", ptr[pre_append_len] == 64);
     TEST("dynarr_append()", get_dynarr_len(ptr) == pre_append_len + 1);
+    TESTERRSUCCESS("dynarr_append()", ptr);
 
     uint8_t vals[] = { 3,6,7,2,3,3};
     uintptr_t pre_appendn_len = get_dynarr_len(ptr);
@@ -78,6 +99,7 @@ int main(){
     TEST("dynarr_appendn()", memcmp(&ptr[pre_appendn_len], vals, sizeof(vals)) == 0);
     TEST("dynarr_appendn()", pre_appendn_len + sizeof(vals) == get_dynarr_len(ptr));
     TEST("dynarr_appendn() old val preserved", ptr[pre_append_len] == 64);
+    TESTERRSUCCESS("dynarr_appendn()", ptr);
 
     uintptr_t len = get_dynarr_len(ptr);
     uint8_t first_val = ptr[0];
@@ -88,6 +110,7 @@ int main(){
     TEST("dynarr_del()", ptr[0] == first_val);
     TEST("dynarr_del()", ptr[1] == later_val);
     TEST("dynarr_del()", get_dynarr_len(ptr) == len - 1);
+    TESTERRSUCCESS("dynarr_del()", ptr);
 
     len = get_dynarr_len(ptr);
     uintptr_t marker_i = len- 4;
@@ -98,6 +121,7 @@ int main(){
     TEST("dynarr_deln()", get_dynarr_len(ptr) == len - del_len);
     TEST("dynarr_deln()", pre_marker_val == ptr[marker_i - 1]);
     TEST("dynarr_deln()", post_del_val == ptr[marker_i]);
+    TESTERRSUCCESS("dynarr_deln()", ptr);
 
     uintptr_t start_i = get_dynarr_len(ptr) - 2;
     len = get_dynarr_len(ptr);
@@ -106,6 +130,7 @@ int main(){
     TEST("dynarr_insertn()", memcmp(&ptr[start_i], vals, sizeof(vals)) == 0);
     TEST("dynarr_insertn()", get_dynarr_len(ptr) == len + sizeof(vals));
     TEST("dynarr_insertn()", ptr[start_i + sizeof(vals)] == pre_insert_val);
+    TESTERRSUCCESS("dynarr_insertn()", ptr);
 
     uintptr_t insert_i = get_dynarr_len(ptr) - 3;
     len = get_dynarr_len(ptr);
@@ -116,6 +141,20 @@ int main(){
     TEST("dynarr_insert()", get_dynarr_len(ptr) == len + 1);
     TEST("dynarr_insert()", ptr[insert_i+1] == other_val);
     TEST("dynarr_insert()", ptr[insert_i-1] == pre_val);
+    TESTERRSUCCESS("dynarr_insert()", ptr);
+
+    // check out of bounds errors
+    dynarr_insertn(ptr, vals, get_dynarr_len(ptr)+1, sizeof(vals));
+    TESTERRFAIL("dynarr_insertn() oob", ptr, ds_out_of_bounds); 
+
+    dynarr_insert(ptr, 1, get_dynarr_len(ptr)+1);
+    TESTERRFAIL("dynarr_insert() oob", ptr, ds_out_of_bounds); 
+
+    dynarr_deln(ptr, get_dynarr_len(ptr)+1, 3);
+    TESTERRFAIL("dynarr_deln() oob", ptr, ds_out_of_bounds); 
+
+    dynarr_del(ptr, get_dynarr_len(ptr) + 1);
+    TESTERRFAIL("dynarr_del() oob", ptr, ds_out_of_bounds); 
 
     dynarr_free(ptr);
 
