@@ -1,50 +1,19 @@
 #include "dynarr.h"
-#include <stdio.h>
 #include <assert.h>
+#include "test_helpers.h"
 
-// I need to do something to handle errors
-// I can return NULL from the realloc functions , but then the user has to catch the error, and I can't think of a way to do that whithout making temp variables that pollute the name space.
-// I could say that you have to make a new ptr to get stuff, but then it will lose memory if the previous function fails.
-// STB does not handle allocation failure.
-//
-// The macro can set the passed in ptr to the return value only if it is not NULL.
-// Then the user will need to check if the capacity changed.
-// We may still be able to return an error code though.
-//
-//
-void print_dynarr(void * ptr){
-    uintptr_t len = get_dynarr_len(ptr);
-    uint8_t * data_ptr = ptr;
-    for(int i = 0; i < len; ++i){
-        printf("item: %d = %u\n", i, data_ptr[i]);
-    }
-}
 
-#define TEST(label, expression)\
-    do{\
-        printf("Test %s\n", label);\
-        printf("Testing: (%s)", #expression);\
-        assert(expression);\
-        printf(": ok\n\n");\
-    } while(0)
-
-#define TESTERRSUCCESS(message, ptr)\
-    do{\
-        TEST(message " err val check", get_dynarr_err(ptr) == ds_success);\
-        TEST(message " err set check", !dynarr_is_err_set(ptr));\
-    }while (0)
-
-#define TESTERRFAIL(message, ptr, err_val)\
-    do{\
-        TEST(message " err val check", get_dynarr_err(ptr) == err_val);\
-        TEST(message " err set check", dynarr_is_err_set(ptr));\
-    }while (0)
-
+// I don't have a reliable way of testing allocation failure. I would
+// have to overlay the pointer to a temporary buffer or something, and
+// then set the allocator to be a bad function that fails. (tries to
+// explain why he can't do something and then comes up with a way to do
+// it in the next sentence)
 int main(){
 
     uint8_t *ptr = NULL;
     TEST("NULL get_dynarr_cap()", get_dynarr_cap(ptr) == 0);
     TEST("NULL get_dynarr_len()", get_dynarr_len(ptr) == 0);
+    TESTERRFAIL("NULL error check", ptr, ds_null_ptr);
 
     ptr = dynarr_alloc(uint8_t, 7);
     TEST("dynarr_alloc()", get_dynarr_cap(ptr) == 7);

@@ -1,10 +1,10 @@
+#pragma once
+
 #include<stdint.h>
 #include<stddef.h>
 #include<string.h>
 #include <stdio.h>
 #include <stdbool.h>
-
-#pragma once
 
 // allow replacement of the allocator by the programmer
 #ifndef C_DS_REALLOC
@@ -18,6 +18,7 @@ typedef enum ds_error_e {
     ds_out_of_bounds,
     ds_null_ptr,
     ds_bad_param,
+    ds_fail, // That one error code you hate getting because you don't know what went wrong
     ds_num_errors,
 } ds_error_e;
 
@@ -35,7 +36,6 @@ char * ds_get_err_str(ds_error_e err){
             return "No matching error found!\n";
     }
 }
-
 
 // General strategy:
 // - Use functions to typecheck as much as possible (pointers mostly)
@@ -55,7 +55,7 @@ char * ds_get_err_str(ds_error_e err){
     //      - arrdel X
     //      - arrdeln X
     //      - insertn x
-    //      - insert
+    //      - insert x
 // - then make hashmap
 // - then make string hashmap
 
@@ -229,7 +229,7 @@ void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, 
         get_dynarr_info(ptr)->len += n;
         dynarr_set_err(ptr, ds_success);
     }
-    else if (start_i >= get_dynarr_len(ptr)) {
+    else if (start_i >= get_dynarr_len(ptr) && get_dynarr_err(ptr) != ds_alloc_fail) {
         dynarr_set_err(ptr, ds_out_of_bounds);
     }
 }
@@ -239,6 +239,7 @@ void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, 
         bare_dyarr_insertn(ptr, items, start_i, n, sizeof(*ptr));\
     }while(0)
 
+// I could make this a function, but then it would not be able to take integer literals
 #define dynarr_insert(ptr, item, start_i)\
     do{\
         dynarr_maybe_grow(ptr, get_dynarr_len(ptr) + 1);\
@@ -247,7 +248,7 @@ void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, 
             ptr[start_i] = item;\
             ++get_dynarr_info(ptr)->len;\
             dynarr_set_err(ptr, ds_success);\
-        }else if (start_i >= get_dynarr_len(ptr)){\
+        }else if (start_i >= get_dynarr_len(ptr) && get_dynarr_err(ptr) != ds_alloc_fail){\
             dynarr_set_err(ptr, ds_out_of_bounds);\
         }\
     }while(0)

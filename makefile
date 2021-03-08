@@ -1,8 +1,12 @@
-all:
+tests: src/test_main.c src/dynarr.h src/alloc_fail_tests.c
 	$(CC) -ggdb src/test_main.c -o test
+	$(CC) -ggdb src/alloc_fail_tests.c -o alloc_fail_tests
 
-run: all
+run: tests
 	./test
+	echo "Starting allocation failure tests!"
+	echo "---------------------------------------------------------------------"
+	./alloc_fail_tests
 
-valgrind: all
+valgrind: tests
 	valgrind test
