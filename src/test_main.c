@@ -2,6 +2,11 @@
 #include <assert.h>
 #include "test_helpers.h"
 
+void print_vals(uint8_t * ptr){
+    for (int i = 0; i < get_dynarr_len(ptr); ++i){
+        printf("%d=%u\n",i, ptr[i]);
+    }
+}
 
 // I don't have a reliable way of testing allocation failure. I would
 // have to overlay the pointer to a temporary buffer or something, and
@@ -59,15 +64,17 @@ int main(){
     uintptr_t pre_append_len = get_dynarr_len(ptr);
     dynarr_append(ptr, 64);
     TEST("dynarr_append()", ptr[pre_append_len] == 64);
-    TEST("dynarr_append()", get_dynarr_len(ptr) == pre_append_len + 1);
+    TEST("dynarr_append()", (get_dynarr_len(ptr) == (pre_append_len + 1)));
     TESTERRSUCCESS("dynarr_append()", ptr);
 
     uint8_t vals[] = { 3,6,7,2,3,3};
+    uint8_t appendn_old_val = ptr[pre_append_len];
     uintptr_t pre_appendn_len = get_dynarr_len(ptr);
     dynarr_appendn(ptr, vals, sizeof(vals));
+    print_vals(ptr);
     TEST("dynarr_appendn()", memcmp(&ptr[pre_appendn_len], vals, sizeof(vals)) == 0);
     TEST("dynarr_appendn()", pre_appendn_len + sizeof(vals) == get_dynarr_len(ptr));
-    TEST("dynarr_appendn() old val preserved", ptr[pre_append_len] == 64);
+    TEST("dynarr_appendn() old val preserved", ptr[pre_append_len] == appendn_old_val);
     TESTERRSUCCESS("dynarr_appendn()", ptr);
 
     uintptr_t len = get_dynarr_len(ptr);

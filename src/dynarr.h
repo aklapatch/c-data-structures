@@ -31,6 +31,7 @@ char * ds_get_err_str(ds_error_e err){
         RET_SWITCH_STR(ds_out_of_bounds);
         RET_SWITCH_STR(ds_null_ptr);
         RET_SWITCH_STR(ds_bad_param);
+        RET_SWITCH_STR(ds_fail);
         RET_SWITCH_STR(ds_num_errors);
         default:
             return "No matching error found!\n";
@@ -44,6 +45,8 @@ char * ds_get_err_str(ds_error_e err){
 // TODO:
 // - make dynarr:
 //   - revise so that macros only handle code that mutates the host pointer.
+//   - add a feature to init over a static buffer and transition to heap-allocated memory.
+//   - set append apis to use insert apis X
 //      - api list:
     //      - alloc x
     //      - realloc x
@@ -175,31 +178,6 @@ void* bare_dynarr_maybe_grow(void * ptr, uintptr_t new_count, uintptr_t item_siz
 
 #define dynarr_maybe_grow(ptr, new_count) (ptr) = bare_dynarr_maybe_grow((ptr), (new_count), sizeof(*(ptr)))
 
-void bare_dyarr_appendn(void* ptr, void* items, uintptr_t n, uintptr_t item_size){
-    if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + n){
-        uint8_t *cpy_start = ((uint8_t*)ptr) + get_dynarr_len(ptr)*item_size;
-        memcpy(cpy_start, items, n*item_size);
-        get_dynarr_info(ptr)->len += n;
-        dynarr_set_err(ptr, ds_success);
-    }
-    // the alloc fail will be set from the call to grow, so we shouldn't need to set it.
-}
-
-#define dynarr_appendn(ptr, items, n)\
-    do {\
-        dynarr_maybe_grow(ptr, get_dynarr_len(ptr) + n); \
-        bare_dyarr_appendn(ptr, items, n, sizeof(*ptr));\
-    }while(0) 
-
-#define dynarr_append(ptr, item) \
-    do {\
-        dynarr_maybe_grow(ptr, get_dynarr_len(ptr) + 1); \
-        if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + 1){\
-            ptr[get_dynarr_len(ptr)] = item;\
-            get_dynarr_info(ptr)->len++;\
-            dynarr_set_err(ptr, ds_success);\
-        }\
-    } while (0)
 
 void bare_dyarr_deln(void* ptr, uintptr_t del_i, uintptr_t n, uintptr_t item_size){
     if (del_i + n <= get_dynarr_len(ptr)){
@@ -221,10 +199,10 @@ void bare_dyarr_deln(void* ptr, uintptr_t del_i, uintptr_t n, uintptr_t item_siz
 #define dynarr_pop(ptr) dynarr_del(ptr, get_dynarr_len(ptr) - 1)
 
 void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, uintptr_t item_size){
-    if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + n && start_i < get_dynarr_len(ptr)){
+    if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + n && start_i <= get_dynarr_len(ptr)){
         uint8_t *cpy_start = ((uint8_t*)ptr) + start_i*item_size;
         uint8_t * move_end = cpy_start + n*item_size;
-        memmove(move_end, cpy_start, (get_dynarr_len(ptr) - start_i- 1)*item_size );
+        memmove(move_end, cpy_start, (get_dynarr_len(ptr) - start_i)*item_size );
         memcpy(cpy_start, items, n*item_size);
         get_dynarr_info(ptr)->len += n;
         dynarr_set_err(ptr, ds_success);
@@ -243,8 +221,8 @@ void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, 
 #define dynarr_insert(ptr, item, start_i)\
     do{\
         dynarr_maybe_grow(ptr, get_dynarr_len(ptr) + 1);\
-        if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + 1 && start_i < get_dynarr_len(ptr)){\
-            memmove(&ptr[start_i + 1], &ptr[start_i], sizeof(*ptr)*(get_dynarr_len(ptr) - 1 - start_i));\
+        if (get_dynarr_cap(ptr) >= get_dynarr_len(ptr) + 1 && start_i <= get_dynarr_len(ptr)){\
+            memmove(&ptr[start_i + 1], &ptr[start_i], sizeof(*ptr)*(get_dynarr_len(ptr) - start_i));\
             ptr[start_i] = item;\
             ++get_dynarr_info(ptr)->len;\
             dynarr_set_err(ptr, ds_success);\
@@ -253,3 +231,6 @@ void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, 
         }\
     }while(0)
 
+#define dynarr_appendn(ptr, items, n) dynarr_insertn(ptr, items, get_dynarr_len(ptr), n)
+
+#define dynarr_append(ptr, item) dynarr_insert(ptr, item, get_dynarr_len(ptr))
