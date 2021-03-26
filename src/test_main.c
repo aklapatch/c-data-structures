@@ -20,6 +20,38 @@ int main(){
     TEST("NULL dynarr_len()", dynarr_len(ptr) == 0);
     TESTERRFAIL("NULL error check", ptr, ds_null_ptr);
 
+    // try saying the buffer is too small to check error handling
+    dynarr_info other_buf[2];
+    ptr = dynarr_init_from_buf(uint8_t, other_buf, sizeof(dynarr_info) - 1);
+    TEST("init from buf failure", ptr == NULL);
+    
+    // test weird alignment
+    uint32_t buf32[sizeof(dynarr_info)];
+    uint32_t* buf_ptr = ((uintptr_t)buf32 % sizeof(uintptr_t) == 0) ? buf32 + 1 : buf32;
+    ptr = dynarr_init_from_buf(uint8_t, buf_ptr, sizeof(buf32) - 4);
+    TEST("init from buf alignment", (uint32_t*)ptr != buf_ptr);
+
+    ptr = dynarr_init_from_buf(uint8_t, other_buf, sizeof(other_buf));
+    TEST("init from buf ", ptr != NULL);
+    TEST("init from buf ", dynarr_len(ptr) == 0);
+    TEST("init from buf ", dynarr_cap(ptr) == sizeof(dynarr_info));
+    TEST("init from buf ", dynarr_outside_mem(ptr) == true);
+    TESTERRSUCCESS("init from buf", ptr);
+
+    // Append a couple items
+    uint8_t items[] = { 3,4,5};
+    dynarr_appendn(ptr, items, sizeof(items));
+    TEST("Appendn init from buf", dynarr_len(ptr) == sizeof(items));
+    TEST("appendn init from buf contents", memcmp(ptr, items, sizeof(items)) == 0);
+    TESTERRSUCCESS("appendn from buf contents", ptr);
+
+    uint8_t * old_ptr = ptr;
+    dynarr_set_cap(ptr, sizeof(other_buf));
+    TEST("Resize from init_from_buf", ptr != old_ptr);
+    TEST("Resize from init_from_buf", dynarr_outside_mem(ptr) == false);
+    TESTERRSUCCESS("Resize from init from buf", ptr);
+    dynarr_free(ptr);
+
     ptr = dynarr_alloc(uint8_t, 7);
     TEST("dynarr_alloc()", dynarr_cap(ptr) == 7);
     TEST("dynarr_alloc() memset", memset(ptr, 0, dynarr_cap(ptr)));

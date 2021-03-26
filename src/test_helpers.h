@@ -19,5 +19,5 @@
     do{\
         TEST(message " err val check", dynarr_err(ptr) == err_val);\
         TEST(message " err set check", dynarr_is_err_set(ptr));\
-        printf("Error str is \"%s\"\n\n", dynarr_get_err_str(ptr));\
+        printf("Error str is \"%s\"\n\n", dynarr_err_str(ptr));\
     }while (0)

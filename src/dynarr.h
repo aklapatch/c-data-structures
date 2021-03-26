@@ -65,7 +65,8 @@ char * ds_get_err_str(ds_error_e err){
 // The dynamic array has a info struct that is allocated behind the pointer the user provides.
 typedef struct dynarr_info {
     uintptr_t len,cap;
-    ds_error_e err;
+    ds_error_e err; // if an error has occurred
+    bool outside_mem;  // if we are using memory from outside of dynarr funcions.
 } dynarr_info;
 
 dynarr_info * dynarr_get_info(void * ptr){
@@ -78,6 +79,10 @@ uintptr_t dynarr_len(void *ptr){
 
 uintptr_t dynarr_cap(void *ptr){
     return (ptr == NULL) ? 0 : dynarr_get_info(ptr)->cap;
+}
+
+bool dynarr_outside_mem(void *ptr){
+    return (ptr == NULL) ?  false : dynarr_get_info(ptr)->outside_mem;
 }
 
 void dynarr_set_err(void * ptr, ds_error_e err){
@@ -94,7 +99,7 @@ bool dynarr_is_err_set(void * ptr){
     return dynarr_err(ptr) != ds_success;
 }
 
-char * dynarr_get_err_str(void* ptr){
+char * dynarr_err_str(void* ptr){
     return ds_get_err_str(dynarr_err(ptr));
 }
 
@@ -102,13 +107,41 @@ void dynarr_print(void *ptr){
     printf("dynarr: ptr=%p, base=%p, len=%u, cap=%u\n",ptr,dynarr_get_info(ptr), dynarr_len(ptr),dynarr_cap(ptr));
 }
 
+void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t item_size){
+    // set up the base of the buffer to be where the info struct is
+    uint8_t *byte_ptr = buf, *orig_ptr = buf;
+    // handle alignment
+    uint16_t mod = (uintptr_t)byte_ptr % sizeof(uintptr_t);
+    if (mod > 0){
+        byte_ptr += (sizeof(uintptr_t) - mod);
+    }
+    if (byte_ptr + sizeof(dynarr_info) > orig_ptr + buf_size_bytes){
+        return NULL;
+    }
+    dynarr_info * base = (dynarr_info*)byte_ptr;
+    base->len = 0;
+    base->err = ds_success;
+    base->outside_mem = true;
+
+    buf_size_bytes -= (uintptr_t)(byte_ptr - orig_ptr) + sizeof(dynarr_info);
+    base->cap= buf_size_bytes/item_size;
+
+    ++base;
+    return base;
+}
+
+#define dynarr_init_from_buf(type, buf, buf_size_bytes) bare_dynarr_init_from_buf(buf, buf_size_bytes, sizeof(type))
+
+
 // This should never be used to free anything because it automatically adds the size of the info struct,
 // to the allocated amount.
 void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
     dynarr_info *base_ptr = NULL;
     if (ptr != NULL){
-        base_ptr = dynarr_get_info(ptr);
+        // if memory is being provided from the outside, then feed NULL into 
+        // realloc instead of an actual pointer.
+        base_ptr = (dynarr_outside_mem(ptr)) ? NULL : dynarr_get_info(ptr);
     }
 
     // only allocate if we need to
@@ -120,6 +153,7 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
                 new_ptr->len = 0;
             }
             new_ptr->err = ds_success;
+            new_ptr->outside_mem = false;
             ++new_ptr;
             return new_ptr;
         }
