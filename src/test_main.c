@@ -3,7 +3,7 @@
 #include "test_helpers.h"
 
 void print_vals(uint8_t * ptr){
-    for (int i = 0; i < dynarr_len(ptr); ++i){
+    for (uint32_t i = 0; i < dynarr_len(ptr); ++i){
         printf("%d=%u\n",i, ptr[i]);
     }
 }

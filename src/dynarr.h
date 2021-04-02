@@ -104,7 +104,7 @@ char * dynarr_err_str(void* ptr){
 }
 
 void dynarr_print(void *ptr){
-    printf("dynarr: ptr=%p, base=%p, len=%u, cap=%u\n",ptr,dynarr_get_info(ptr), dynarr_len(ptr),dynarr_cap(ptr));
+    printf("dynarr: ptr=%p, base=%p, len=%lu, cap=%lu\n", ptr,dynarr_get_info(ptr), dynarr_len(ptr),dynarr_cap(ptr));
 }
 
 void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t item_size){
@@ -176,7 +176,8 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 // absorb the pointer normally emitted by reallocing
 #define dynarr_free(ptr)\
     do{\
-        void * __absorb__realloc__ret__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);\
+        void* __absorb_realloc__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);\
+        (void)__absorb__realloc__ptr;\
     } while (0)
 
 #define dynarr_set_cap(ptr, new_cap) (ptr) = bare_dynarr_realloc((ptr), (new_cap), sizeof(*(ptr)));
