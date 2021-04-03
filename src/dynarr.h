@@ -63,6 +63,18 @@ char * ds_get_err_str(ds_error_e err){
 // - then make string hashmap
 
 // The dynamic array has a info struct that is allocated behind the pointer the user provides.
+// TODO: investigate having variable sized length and cap fields.
+// In memory it would look something like this:
+// [byte array for len and cap][smaller info struct]
+// The new struct would have these members
+// uint8_t err,len_cap_size;
+// bool outside_mem
+// this struct would be immediately behind the pointer in memory, and then len and cap would
+// be behind this struct in memory, but len and cap could be dynamically alloced
+// len_cap_size would be how many bytes len is (4 for 32 bits, 8 for 64,etc).
+// That same size could be used for cap to.
+// The regular uintptr_t struct needs 24 bytes, so this one would take 3 bytes + the extra space
+// for a 32bit size+cap you get 4bytes * 3 = 12 bytes (which is half the original size)
 typedef struct dynarr_info {
     uintptr_t len,cap;
     ds_error_e err; // if an error has occurred
@@ -132,7 +144,6 @@ void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t i
 
 #define dynarr_init_from_buf(type, buf, buf_size_bytes) bare_dynarr_init_from_buf(buf, buf_size_bytes, sizeof(type))
 
-
 // This should never be used to free anything because it automatically adds the size of the info struct,
 // to the allocated amount.
 void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
@@ -177,7 +188,7 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 #define dynarr_free(ptr)\
     do{\
         void* __absorb_realloc__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);\
-        (void)__absorb__realloc__ptr;\
+        (void)__absorb_realloc__ptr;\
     } while (0)
 
 #define dynarr_set_cap(ptr, new_cap) (ptr) = bare_dynarr_realloc((ptr), (new_cap), sizeof(*(ptr)));
