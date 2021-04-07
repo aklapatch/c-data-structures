@@ -190,6 +190,7 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
         if (ptr != NULL){\
             void* __absorb_realloc__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);\
             (void)__absorb_realloc__ptr;\
+            ptr = NULL;\
         }\
     } while (0)
 
