@@ -1,2 +1,1 @@
-alloc_fail_tests
-reg_tests
+build/*

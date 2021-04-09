@@ -1,16 +1,27 @@
 CFLAGS=-ggdb -Os -Wall -Wextra
-tests: src/test_main.c src/dynarr.h src/alloc_fail_tests.c
-	$(CC) $(CFLAGS) src/test_main.c -o test
-	$(CC) $(CFLAGS) src/alloc_fail_tests.c -o alloc_fail_tests
+OUTDIR=./build/
 
-hmap: src/hmap_test.c src/dynarr.h src/hmap.h
-	$(CC) $(CFLAGS) src/hmap_test.c -o hmap_test
 
-run: tests
-	./test
+
+tests: src/test_main.c src/dynarr.h src/alloc_fail_tests.c src/hmap.h src/hash_test.c outdir
+	$(CC) $(CFLAGS) src/test_main.c -o $(OUTDIR)/test
+	$(CC) $(CFLAGS) src/alloc_fail_tests.c -o $(OUTDIR)/alloc_fail_tests
+	$(CC) $(CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
+
+outdir:
+	mkdir -p $(OUTDIR)
+
+clean:
+	rm -rf $(OUTDIR)
+
+test: tests
+	$(OUTDIR)/test
 	echo "Starting allocation failure tests!"
 	echo "---------------------------------------------------------------------"
-	./alloc_fail_tests
+	$(OUTDIR)/alloc_fail_tests
+	echo "Starting hash_test"
+	echo "---------------------------------------------------------------------"
+	$(OUTDIR)hash_test
 
 valgrind: tests
 	valgrind test
