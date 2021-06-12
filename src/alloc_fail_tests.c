@@ -11,7 +11,7 @@ void * bad_realloc(void*ptr, size_t size){
 
 int main(){
 
-    dynarr_info buf[2] = {0};
+    c_ds_info buf[2] = {0};
     
     uint8_t *ptr = dynarr_alloc(uint8_t, 7);
     TEST("dynarr_alloc() fail", ptr == NULL);

@@ -1,5 +1,5 @@
 #include"hmap.h"
-#define ROUNDS (4*UINT16_MAX)
+#define ROUNDS (2*UINT16_MAX)
 
 int main(){
 

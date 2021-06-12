@@ -1,16 +1,25 @@
 CFLAGS=-ggdb -Os -Wall -Wextra
 OUTDIR=./build/
 
-tests: src/test_main.c src/dynarr.h src/alloc_fail_tests.c src/hmap.h src/hash_test.c outdir
+tests: dynarr hmap
+
+hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
+	$(CC) $(CFLAGS) src/hmap_test.c -o $(OUTDIR)/hmap_test
+	$(CC) $(CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
+
+dynarr: src/test_main.c src/test_helpers.h src/dynarr.h src/alloc_fail_tests.c
 	$(CC) $(CFLAGS) src/test_main.c -o $(OUTDIR)/test
 	$(CC) $(CFLAGS) src/alloc_fail_tests.c -o $(OUTDIR)/alloc_fail_tests
-	$(CC) $(CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
+
 
 outdir:
 	mkdir -p $(OUTDIR)
 
 clean:
 	rm -rf $(OUTDIR)
+
+hmap_test: hmap
+	$(OUTDIR)/hmap_test
 
 test: tests
 	$(OUTDIR)/test

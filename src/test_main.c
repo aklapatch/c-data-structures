@@ -21,12 +21,12 @@ int main(){
     TESTERRFAIL("NULL error check", ptr, ds_null_ptr);
 
     // try saying the buffer is too small to check error handling
-    dynarr_info other_buf[2];
-    ptr = dynarr_init_from_buf(uint8_t, other_buf, sizeof(dynarr_info) - 1);
+    c_ds_info other_buf[2];
+    ptr = dynarr_init_from_buf(uint8_t, other_buf, sizeof(c_ds_info) - 1);
     TEST("init from buf failure", ptr == NULL);
     
     // test weird alignment
-    uint32_t buf32[sizeof(dynarr_info)];
+    uint32_t buf32[sizeof(c_ds_info)];
     uint32_t* buf_ptr = ((uintptr_t)buf32 % sizeof(uintptr_t) == 0) ? buf32 + 1 : buf32;
     ptr = dynarr_init_from_buf(uint8_t, buf_ptr, sizeof(buf32) - 4);
     TEST("init from buf alignment", (uint32_t*)ptr != buf_ptr);
@@ -34,7 +34,7 @@ int main(){
     ptr = dynarr_init_from_buf(uint8_t, other_buf, sizeof(other_buf));
     TEST("init from buf ", ptr != NULL);
     TEST("init from buf ", dynarr_len(ptr) == 0);
-    TEST("init from buf ", dynarr_cap(ptr) == sizeof(dynarr_info));
+    TEST("init from buf ", dynarr_cap(ptr) == sizeof(c_ds_info));
     TEST("init from buf ", dynarr_outside_mem(ptr) == true);
     TESTERRSUCCESS("init from buf", ptr);
 

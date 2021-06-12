@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 // allow replacement of the allocator by the programmer
+// TODO: add malloc and free instead, so that we can 
 #ifndef C_DS_REALLOC
 #include <stdlib.h>
 #define C_DS_REALLOC realloc
@@ -18,6 +19,8 @@ typedef enum ds_error_e {
     ds_out_of_bounds,
     ds_null_ptr,
     ds_bad_param,
+    ds_not_found,
+    ds_wrong_ds, // used a hashmap function on an array or vice versa
     ds_fail, // That one error code you hate getting because you don't know what went wrong
     ds_num_errors,
 } ds_error_e;
@@ -75,14 +78,36 @@ char * ds_get_err_str(ds_error_e err){
 // That same size could be used for cap to.
 // The regular uintptr_t struct needs 24 bytes, so this one would take 3 bytes + the extra space
 // for a 32bit size+cap you get 4bytes * 3 = 12 bytes (which is half the original size)
-typedef struct dynarr_info {
+// REVISION:
+// use 1 byte to hold the error, cap and len sizes, outside_mem, and hash/array bool
+// 3 bits for cap,len size (can be reduced to 2, since we have 4 possibles: u8,u16,u32,u64)
+//
+// 1 bit for outside_mem
+// 1 bit for hash/array
+// that leaves 3 bits for the error (too little)
+// So cap,len size needs to be 2 bits
+// If I add more data structures later, I will need more space.
+// Probably split the error out, since it takes the most space
+// u8 err, u8 meta
+typedef enum {
+    size_u8 = 0,
+    size_u16,
+    size_u32,
+    size_u64,
+} size_classes;
+typedef enum {
+    ds_dynarr= 0,
+    ds_hm,
+} ds_type;
+
+typedef struct c_ds_info {
     uintptr_t len,cap;
     ds_error_e err; // if an error has occurred
-    bool outside_mem;  // if we are using memory from outside of dynarr funcions.
-} dynarr_info;
+    bool outside_mem,hash_table;  // if we are using memory from outside of dynarr funcions.
+} c_ds_info;
 
-dynarr_info * dynarr_get_info(void * ptr){
-    return (ptr == NULL) ? NULL : ((dynarr_info*)ptr) - 1;
+c_ds_info * dynarr_get_info(void * ptr){
+    return (ptr == NULL) ? NULL : ((c_ds_info*)ptr) - 1;
 }
 
 uintptr_t dynarr_len(void *ptr){
@@ -119,6 +144,7 @@ void dynarr_print(void *ptr){
     printf("dynarr: ptr=%p, base=%p, len=%lu, cap=%lu\n", ptr,dynarr_get_info(ptr), dynarr_len(ptr),dynarr_cap(ptr));
 }
 
+// TODO: test this better,
 void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t item_size){
     // set up the base of the buffer to be where the info struct is
     uint8_t *byte_ptr = buf, *orig_ptr = buf;
@@ -127,15 +153,15 @@ void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t i
     if (mod > 0){
         byte_ptr += (sizeof(uintptr_t) - mod);
     }
-    if (byte_ptr + sizeof(dynarr_info) > orig_ptr + buf_size_bytes){
+    if (byte_ptr + sizeof(c_ds_info) > orig_ptr + buf_size_bytes){
         return NULL;
     }
-    dynarr_info * base = (dynarr_info*)byte_ptr;
+    c_ds_info * base = (c_ds_info*)byte_ptr;
     base->len = 0;
     base->err = ds_success;
     base->outside_mem = true;
 
-    buf_size_bytes -= (uintptr_t)(byte_ptr - orig_ptr) + sizeof(dynarr_info);
+    buf_size_bytes -= (uintptr_t)(byte_ptr - orig_ptr) + sizeof(c_ds_info);
     base->cap= buf_size_bytes/item_size;
 
     ++base;
@@ -148,35 +174,35 @@ void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t i
 // to the allocated amount.
 void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
-    dynarr_info *base_ptr = NULL;
+    c_ds_info *base_ptr = NULL;
+    bool outside_mem = false;
     if (ptr != NULL){
         // if memory is being provided from the outside, then feed NULL into 
         // realloc instead of an actual pointer.
         base_ptr = (dynarr_outside_mem(ptr)) ? NULL : dynarr_get_info(ptr);
+        outside_mem = dynarr_outside_mem(ptr);
     }
 
-    // only allocate if we need to
-    if (dynarr_cap(ptr) < item_count){
-        dynarr_info *new_ptr = C_DS_REALLOC(base_ptr, item_count*item_size + sizeof(dynarr_info));
-        if (new_ptr != NULL){
-            new_ptr->cap = item_count;
-            if (base_ptr == NULL){
-                new_ptr->len = 0;
-            }
-            new_ptr->err = ds_success;
-            new_ptr->outside_mem = false;
-            ++new_ptr;
-            return new_ptr;
+    c_ds_info *new_ptr = C_DS_REALLOC(base_ptr, item_count*item_size + sizeof(c_ds_info));
+    if (new_ptr != NULL){
+        new_ptr->cap = item_count;
+        if (base_ptr == NULL && !outside_mem){
+            new_ptr->len = 0;
+        } else if (outside_mem){
+            new_ptr->len = dynarr_len(ptr);
         }
-        else {
-            // return the old pointer if we don't get memory
-            dynarr_set_err(ptr, ds_alloc_fail);
-            return ptr;
+
+        new_ptr->err = ds_success;
+        new_ptr->outside_mem = false;
+        ++new_ptr;
+        if (outside_mem){
+            memcpy(new_ptr, ptr, new_ptr->len);
         }
+        return new_ptr;
     }
     else {
-        // no allocation was needed, but set success anyway.
-        dynarr_set_err(ptr, ds_success);
+        // return the old pointer if we don't get memory
+        dynarr_set_err(ptr, ds_alloc_fail);
         return ptr;
     }
 }
@@ -185,14 +211,13 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 #define dynarr_alloc(type, item_count) bare_dynarr_realloc(NULL, item_count, sizeof(type));
 
 // absorb the pointer normally emitted by reallocing
-#define dynarr_free(ptr)\
-    do{\
-        if (ptr != NULL){\
-            void* __absorb_realloc__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);\
-            (void)__absorb_realloc__ptr;\
-            ptr = NULL;\
-        }\
-    } while (0)
+void dynarr_free(void * ptr){
+    if (ptr != NULL){
+        void* __absorb_realloc__ptr = C_DS_REALLOC(dynarr_get_info(ptr), 0);
+        (void)__absorb_realloc__ptr;
+        ptr = NULL;
+    }
+}
 
 #define dynarr_set_cap(ptr, new_cap) (ptr) = bare_dynarr_realloc((ptr), (new_cap), sizeof(*(ptr)));
 
@@ -226,7 +251,6 @@ void* bare_dynarr_maybe_grow(void * ptr, uintptr_t new_count, uintptr_t item_siz
 }
 
 #define dynarr_maybe_grow(ptr, new_count) (ptr) = bare_dynarr_maybe_grow((ptr), (new_count), sizeof(*(ptr)))
-
 
 void bare_dyarr_deln(void* ptr, uintptr_t del_i, uintptr_t n, uintptr_t item_size){
     if (del_i + n <= dynarr_len(ptr)){
