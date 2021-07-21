@@ -175,11 +175,11 @@ key_meta_group* hm_bare_meta_ptr(void * ptr, size_t item_size){
         return NULL;
     }
     uintptr_t size_to_pass = item_size * hm_cap(ptr);
-    key_meta_group * meta_ptr = ptr + size_to_pass;
+    key_meta_group * meta_ptr = (uint8_t*)ptr + size_to_pass;
     return meta_ptr;
 }
 
-#define hm_meta_ptr(ptr) hm_bare_meta_ptr(ptr, sizeof((ptr)))
+#define hm_meta_ptr(ptr) hm_bare_meta_ptr(ptr, sizeof(*(ptr)))
 
 // This returns UINTPTR_MAX upon failure
 // This table uses jump distances to put other items into the array of keys and items
@@ -188,9 +188,9 @@ key_meta_group* hm_bare_meta_ptr(void * ptr, size_t item_size){
 // hash, if the top bit of the byte array is set, then the slot is being used for storage, and 
 // the key in there does not match the key hash
 // TODO: return NULL ptr instead of an err value
-uintptr_t hm_find_item(void * ptr, uint64_t key){
+uintptr_t hm_find_item(void * ptr, uint64_t key, size_t item_size){
     // start looking for the key in the metadata
-    key_meta_group* meta = hm_meta_ptr(ptr);
+    key_meta_group* meta = hm_bare_meta_ptr(ptr, item_size);
     if (meta == NULL){
         return UINTPTR_MAX;
     }
@@ -229,9 +229,9 @@ uintptr_t hm_find_item(void * ptr, uint64_t key){
 // assume finding a 0 key means the slot is open.
 // if the storage bit is set then you can insert into that slot
 // TODO add size checks
-uintptr_t hm_find_empty_slot(void * ptr, uint64_t key){
+uintptr_t hm_find_empty_slot(void * ptr, uint64_t key, size_t item_size){
     // start looking for the key in the metadata
-    key_meta_group* meta = hm_meta_ptr(ptr);
+    key_meta_group* meta = hm_bare_meta_ptr(ptr, item_size);
     if (meta == NULL){
         return UINTPTR_MAX;
     }
@@ -283,22 +283,9 @@ uintptr_t hm_find_empty_slot(void * ptr, uint64_t key){
     return UINTPTR_MAX;
 }
 
-#define hm_set(ptr, key, val) ptr = hm_bare_set(ptr, key, &val, sizeof(val))
+void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size);
 
-void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){
-    uintptr_t __found_location_dex = hm_find_empty_slot(ptr, key);
-    uint8_t* byte_ptr = (uint8_t*)ptr;
-    if (__found_location_dex != UINTPTR_MAX){
-        uint16_t __c_ds_group_num = __found_location_dex/GROUP_SIZE;
-        uint16_t __c_ds_group_i = __found_location_dex - __c_ds_group_num*GROUP_SIZE;
-        key_meta_group * meta_ptr = hm_meta_ptr(ptr);
-        meta_ptr[__c_ds_group_num].keys[__c_ds_group_i] = key;
-        memcpy(&byte_ptr[val_size*__found_location_dex], val_ptr, val_size);
-    } else {
-        hm_set_err(ptr, ds_not_found);
-    }
-    return ptr;
-}
+#define hm_set(ptr, key, val) ptr = hm_bare_set(ptr, key, &val, sizeof(val))
 
 void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
@@ -320,6 +307,7 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
         new_ptr->cap = new_cap;
         new_ptr->outside_mem = false;
         new_ptr->err = ds_success;
+        new_ptr->len = 0;
         // copy over necessary parts of the old table if there is one.
         if (base_ptr == NULL || base_ptr->cap == 0){
             // previous table was empty, don't coyp or re-insert anything
@@ -328,18 +316,15 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
             memset(new_ptr, 0, new_size - sizeof(c_ds_info));
             return new_ptr;
         } else {
-
-            new_ptr->len = base_ptr->len; 
             ++new_ptr;
+            memset(new_ptr, 0, new_size - sizeof(c_ds_info));
 
             // go through the meta table and re-hash everything to insert
             // it into the new table.
-            uintptr_t mask = new_cap - 1;
-            key_meta_group* old_meta = hm_meta_ptr(base_ptr);
-            uintptr_t key_i = 0;
+            key_meta_group* old_meta = hm_bare_meta_ptr(ptr, item_size);
             // TODO: run insert in a loop while iterating over the old
             // table
-            while (base_ptr->len > 0){
+            for (uintptr_t key_i = 0; base_ptr->len > 0 && key_i < hm_cap(new_ptr); ++key_i){
                 // if you find a 0 key, then skip it.
                 uintptr_t group_num = key_i/GROUP_SIZE;
                 uint16_t group_i = key_i - group_num*GROUP_SIZE;
@@ -347,15 +332,49 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
                 if (key != 0){
                     uint8_t * val_ptr = (uint8_t*)ptr + item_size*key_i;
                     hm_bare_set(new_ptr, key, val_ptr, item_size); 
+                    if (hm_is_err_set(new_ptr)){
+                        // return the old table
+                        void * _free_me = C_DS_REALLOC(new_ptr, 0);
+                        (void)_free_me;
+                        base_ptr->err = ds_not_found;
+                        return ptr;
+                    }
                     --base_ptr->len;
                 }
             }
             // free old memory
-            (void*)C_DS_REALLOC(base_ptr, 0);
+            void * _ignore_this = C_DS_REALLOC(base_ptr, 0);
+            (void)_ignore_this;
             return new_ptr;
-
         }
     }
 }
 
 #define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, new_cap, sizeof(*ptr))
+
+void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){
+    uintptr_t __found_location_dex = hm_find_empty_slot(ptr, key, val_size);
+    uint8_t* byte_ptr = (uint8_t*)ptr;
+    if (__found_location_dex != UINTPTR_MAX){
+        uint16_t __c_ds_group_num = __found_location_dex/GROUP_SIZE;
+        uint16_t __c_ds_group_i = __found_location_dex - __c_ds_group_num*GROUP_SIZE;
+        key_meta_group * meta_ptr = hm_bare_meta_ptr(ptr, val_size);
+        meta_ptr[__c_ds_group_num].keys[__c_ds_group_i] = key;
+        memcpy(&byte_ptr[val_size*__found_location_dex], val_ptr, val_size);
+        hm_info_ptr(ptr)->len++;
+    } else {
+        // try to reallocate
+        ptr = hm_bare_realloc(ptr,hm_cap(ptr) + 1, val_size);
+        if (hm_is_err_set(ptr)){
+            return ptr;
+        }
+
+        ptr = hm_bare_set(ptr, key, val_ptr, val_size);
+        if (hm_is_err_set(ptr)){
+            return ptr;
+        }
+        hm_set_err(ptr, ds_not_found);
+    }
+    return ptr;
+}
+

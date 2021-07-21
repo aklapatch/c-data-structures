@@ -1,5 +1,6 @@
 #pragma once
 #include <stdio.h>
+#include <assert.h>
 
 #define TEST(label, expression)\
     do{\
