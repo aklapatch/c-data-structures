@@ -13,6 +13,12 @@
 #define C_DS_REALLOC realloc
 #endif
 
+#define C_DS_FREE(x)\
+    do{\
+        void * __out_ptr = C_DS_REALLOC((x), 0);\
+        (void)__out_ptr;\
+    } while (0)
+
 typedef enum ds_error_e {
     ds_success = 0,
     ds_alloc_fail,
@@ -20,6 +26,7 @@ typedef enum ds_error_e {
     ds_null_ptr,
     ds_bad_param,
     ds_not_found,
+    ds_unimp, // function not implemented
     ds_wrong_ds, // used a hashmap function on an array or vice versa
     ds_fail, // That one error code you hate getting because you don't know what went wrong
     ds_num_errors,
@@ -34,6 +41,9 @@ char * ds_get_err_str(ds_error_e err){
         RET_SWITCH_STR(ds_out_of_bounds);
         RET_SWITCH_STR(ds_null_ptr);
         RET_SWITCH_STR(ds_bad_param);
+        RET_SWITCH_STR(ds_not_found);
+        RET_SWITCH_STR(ds_unimp);
+        RET_SWITCH_STR(ds_wrong_ds);
         RET_SWITCH_STR(ds_fail);
         RET_SWITCH_STR(ds_num_errors);
         default:

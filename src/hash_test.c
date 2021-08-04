@@ -2,6 +2,7 @@
 #define ROUNDS (2*UINT16_MAX)
 
 int main(){
+    // test distribution of a certain function
 
     uint64_t matches[ROUNDS] = {0};
     uint32_t total_different_vals = 0;
