@@ -97,6 +97,7 @@ uint64_t ahash_buf(uint8_t *data, size_t data_len){
 }
 #endif
 
+
 // constants for the metadata
 // Empty slot
 #define META_EMPTY ((uint8_t)0xFF)
@@ -107,11 +108,66 @@ uint64_t ahash_buf(uint8_t *data, size_t data_len){
 // Mask to get the list offset
 #define LIST_OFF_MASK ((uint8_t)0x7f)
 
+#define DEX_TS ((uintptr_t)UINTPTR_MAX)
+
 #define GROUP_SIZE (16)
 typedef struct {
-    uint8_t meta[GROUP_SIZE];
+    //MSB set key slot is storage
+    uint8_t key_meta[GROUP_SIZE];
     uint64_t keys[GROUP_SIZE];
+    // UINTPTR_MAX means key slot is open
+    uintptr_t indexs[GROUP_SIZE];
+
+    // This meta represents if the value slot is open or not.
+    // 0xFF, value slot is free
+    // 0, value slot is taken (may use it to figure out where next open slot is)
+    uint8_t value_meta[GROUP_SIZE];
 } key_meta_group;
+
+typedef struct hm_info{
+    uintptr_t num,cap;
+    key_meta_group* meta;
+    ds_error_e err;
+    bool outside_mem, hash_table;
+} hm_info;
+//
+// For the memory layout of the hash table:
+// [info struct][data (ptr points here[0])][keys]
+// keys are uint64_t for keys
+hm_info * hm_info_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : (key_meta_group*)ptr - 1;
+}
+
+uintptr_t hm_cap(void * ptr){
+    hm_info_ptr* tmmp = hm_info_ptr(ptr);
+    return (tmmp == NULL) ? 0 : hm_info_ptr(ptr)->cap;
+}
+
+uintptr_t hm_num(void * ptr){
+    hm_info_ptr* tmmp = hm_info_ptr(ptr);
+    return (tmmp == NULL) ? 0 : hm_info_ptr(ptr)->num;
+}
+
+void hm_set_err(void * ptr, ds_error_e err){
+    if (ptr != NULL){
+        hm_info_ptr(ptr)->err = err;
+    }
+}
+
+ds_error_e hm_err(void * ptr){
+    if (ptr == NULL){
+        return ds_null_ptr;
+    }
+    return hm_info_ptr(ptr)->err;
+}
+
+bool hm_is_err_set(void * ptr){
+    return hm_err(ptr) != ds_success;
+}
+
+char * hm_err_str(void *ptr){
+    return ds_get_err_str(hm_err(ptr));
+}
 
 // API:
 // - find (key) -> index
@@ -131,36 +187,6 @@ uint8_t hm_list_off(uint8_t num){
     return num & LIST_OFF_MASK;
 }
 
-// For the memory layout of the hash table:
-// [info struct][data (ptr points here[0])][keys]
-// keys are uint64_t for keys
-c_ds_info * hm_info_ptr(void * ptr){
-    return dynarr_get_info(ptr);
-}
-
-uintptr_t hm_cap(void * ptr){
-    return dynarr_cap(ptr);
-}
-
-uintptr_t hm_num(void * ptr){
-    return dynarr_len(ptr);
-}
-
-void hm_set_err(void * ptr, ds_error_e err){
-    dynarr_set_err(ptr, err);
-}
-
-ds_error_e hm_err(void * ptr){
-    return dynarr_err(ptr);
-}
-
-bool hm_is_err_set(void * ptr){
-    return dynarr_is_err_set(ptr);
-}
-
-char * hm_err_str(void *ptr){
-    return ds_get_err_str(hm_err(ptr));
-}
 
 uintptr_t next_pow2(uintptr_t input){
     input--;
@@ -204,6 +230,7 @@ void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size);
 #define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 #define hm_set(ptr, key, val) ptr = hm_bare_set(ptr, key, &val, sizeof(val))
 
+// The meta table in the info struct needs to be allocated too
 void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
     c_ds_info *base_ptr = NULL;
@@ -270,6 +297,42 @@ void hm_bare_set_member(void * ptr, uintptr_t set_i){
 
 }
 
+#define hm_set(ptr, key, val) hm_bare_set(ptr, key, &val, sizeof(val))
+
+// returns UINTPTR_MAX on failure
+uintptr_t hm_raw_find_open_slot(void* ptr, uint64_t key){
+
+}
+
+void hm_dex_to_dexs(uintptr_t main_i, uintptr_t * group_num, uint16_t* inner_i){
+    *group_num = main_i/GROUP_SIZE;
+    *inner_i = main_i - *group_num;
+}
+
+key_meta_group* hm_ptr_to_group(void* ptr, uintptr_t group_num){
+    return (hm_bare_meta_ptr(ptr) == NULL) ? NULL : hm_bare_meta_ptr(ptr) - group_num;
+}
+#if 0
+#define hm_test_set(ptr, k, v)\
+    do{\
+        uintptr_t _found_dex_ = find_empty_or_storage_dex(ptr, k);
+        if (_found_dex != UINTPTR_MAX){
+
+
+        }
+
+    }while(0)
+#endif
+
+void hm_copy_val_in(void* ptr, uintptr_t dex, void* val_in, size_t val_size){
+    uint8_t *byte_ptr = (uint8_t*)ptr + val_size*dex;
+    memcpy(byte_ptr, val_in, val_size);
+}
+void hm_copy_val_out(void* ptr, uintptr_t dex, void* val_out, size_t val_size){
+    uint8_t *byte_ptr = (uint8_t*)ptr + val_size*dex;
+    memcpy(val_out, byte_ptr, val_size);
+}
+
 // This table uses jump distances to put other items into the array of keys and items
 // Theh top bit is set if a matching hash is there, the rest of the 7 bits are the jump distance
 // if the jump distance is 0 and the  key does not match, then there are no more items matching that
@@ -282,11 +345,18 @@ void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){
         return ptr;
     }
 
+    if (hm_cap(ptr) == hm_num(ptr)){
+        ptr = hm_bare_realloc(ptr, hm_cap(ptr) + 1, val_size);
+        if (hm_is_err_set(ptr)){
+            return ptr;
+        }
+    }
+
     uint64_t hash = C_DS_HASH_FUNC((uint8_t*)&key, sizeof(uint64_t));
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     // meta groups are groups of 16, so find which group this is in.
-    uintptr_t group_num = truncated_hash/GROUP_SIZE;
-    uint16_t group_i = truncated_hash - group_num*GROUP_SIZE;
+    uintptr_t group_num; uint16_t group_i;
+    hm_dex_to_dexs(truncated_hash, &group_num, &group_i);
 
     key_meta_group* search_meta = meta - group_num;
 
@@ -294,97 +364,62 @@ void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){
     do{
         // found an empty slot
         if (hm_slot_empty(search_meta->meta[group_i]) || search_meta->keys[group_i] == key){
-            uint8_t *byte_ptr = (uint8_t*)ptr + val_size*truncated_hash;
             search_meta->keys[group_i] = key;
             search_meta->meta[group_i] = 0;
-            memcpy(byte_ptr, val_ptr, val_size);
+            hm_copy_val_in(ptr, group_num*GROUP_SIZE + group_i, val_ptr, val_size);
             hm_info_ptr(ptr)->len++;
             hm_set_err(ptr, ds_success);
 
             return ptr;
         } else if (hm_slot_storage(search_meta->meta[group_i])){
-            // move the value of the storage slot around
-            // TODO: hard
-            uint64_t old_key = search_meta->keys[group_i];
-            uint8_t old_list_off = hm_list_off(search_meta->meta[group_i]);
-            uintptr_t old_hash = C_DS_HASH_FUNC((uint8_t*)&old_key, sizeof(old_key));
-            uint64_t old_truncated_hash = truncate_to_cap(ptr, old_hash);
 
-            // find the original direct hit and go to the end of its 
-            // linked list to see where to put this.
-            uintptr_t old_group_num = old_truncated_hash/GROUP_SIZE;
-            uintptr_t old_group_i = old_truncated_hash - old_group_num*GROUP_SIZE 
-            key_meta_group * old_hit = hm_meta_ptr(ptr) - old_group_num;
-
-            // find this key in the list
-            uintptr_t prev_key_i = old_group_i;
-            uintptr_t prev_key_group = old_group_num;
-            uintptr_t key_i = old_group_i;
-            uintptr_t key_group_i = old_group_num;
-            uint8_t list_off = hm_list_off(old_hit->meta[old_group_i]);
-            uintptr_t j_dist = jump_distance(list_off);
-            key_meta_group * key_meta = old_hit;
-            if (j_dist == 0){
-                hm_set_err(ptr, ds_not_found);
-                return ptr;
-            }
-            do {
-                uintptr_t new_i = truncate_to_cap(ptr, j_dist + key_group_i*GROUP_SIZE + key_i);
-                key_i = new_i/GROUP_SIZE;
-                key_group_i = new_i - key_group_i*GROUP_SIZE;
-                key_meta = hm_meta_ptr(ptr) - key_group_i;
-                if (key_meta->keys[key_i]){
-                    break;
-                }
-                // set the prev variables and keep going
-                prev_key_i = key_i;
-                prev_key_group = key_group_i;
-                j_dist = jump_distance(hm_list_off(key_meta->meta[key_i]);
-
-            } while(true);
-
+            // hard, I need to move a key around to get it to 
+            // fit in with it's original hit and the end of
+            // wherever the linked list reaches
+            // the key I am replacing
             hm_set_err(ptr, ds_unimp);
             return ptr;
         }
+
         // go through the linked list until we get to the end.
         if (list_off > 0){
             // jump to the next item
             uintptr_t j_dist = jump_distance(list_off);
             uintptr_t new_i = truncate_to_cap(ptr, j_dist + group_num*GROUP_SIZE + group_i);
-            group_num = new_i/GROUP_SIZE;
-            group_i = new_i - group_num*GROUP_SIZE;
+            hm_dex_to_dexs(new_i, &group_num, &group_i);
         }
-        else {
-            // we are at the end of the linked list, so try out jump distances to see if we can find a fit
-            for (uint8_t i = 1; i <= LIST_OFF_MASK; ++i){
-                uintptr_t j_dist = jump_distance(i);
-                uintptr_t new_i = truncate_to_cap(ptr, j_dist + group_num*GROUP_SIZE + group_i);
-                uintptr_t tmp_grp = new_i/GROUP_SIZE;
-                uintptr_t tmp_i = new_i - tmp_grp*GROUP_SIZE;
-                search_meta = meta - tmp_grp;
+        list_off = hm_list_off(search_meta->meta[group_i]);
+    } while (list_off > 0);
 
-                // see if the slot is empty
-                if (hm_slot_empty(search_meta->meta[tmp_i])){
-                    uint8_t *byte_ptr = (uint8_t*)ptr + val_size*new_i;
-                    search_meta->keys[tmp_i] = key;
-                    search_meta->meta[tmp_i] = STORAGE_BIT_MASK;
-                    memcpy(byte_ptr, val_ptr, val_size);
-                    hm_info_ptr(ptr)->len++;
+    // we are at the end of the linked list, so try out jump distances to see if we can find a fit
+    for (uint8_t i = 1; i <= LIST_OFF_MASK; ++i){
+        uintptr_t j_dist = jump_distance(i);
+        uintptr_t new_i = truncate_to_cap(ptr, j_dist + group_num*GROUP_SIZE + group_i);
+        uintptr_t tmp_grp; uint16_t tmp_i;
+        hm_dex_to_dexs(new_i, &tmp_grp, &tmp_i);
 
-                    // set the offset for the previous item we hit
-                    search_meta = meta - group_num;
-                    uint8_t old_val = search_meta->meta[group_i];
-                    // mask off the lower bits and set them to something else
-                    search_meta->meta[group_i] = (old_val & STORAGE_BIT_MASK) | i;
+        search_meta = hm_ptr_to_group(ptr, tmp_grp);
 
-                    hm_set_err(ptr, ds_success);
-                    return ptr;
-                }
-            }
-            hm_set_err(ptr, ds_not_found);
+        // see if the slot is empty
+        if (hm_slot_empty(search_meta->meta[tmp_i])){
+            uint8_t *byte_ptr = (uint8_t*)ptr + val_size*new_i;
+            search_meta->keys[tmp_i] = key;
+            search_meta->meta[tmp_i] = STORAGE_BIT_MASK;
+            hm_copy_val_in(ptr, new_i, val_ptr, val_size);
+            hm_info_ptr(ptr)->len++;
+
+            // set the offset for the previous item we hit
+            search_meta = meta - group_num;
+            uint8_t old_val = search_meta->meta[group_i];
+            // mask off the lower bits and set them to something else
+            search_meta->meta[group_i] = (old_val & STORAGE_BIT_MASK) | i;
+
+            hm_set_err(ptr, ds_success);
             return ptr;
         }
-    } while (list_off > 0);
+    }
+
+    hm_set_err(ptr, ds_not_found);
     return ptr;
 }
 

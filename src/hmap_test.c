@@ -27,11 +27,12 @@ int main(){
         keys[i] = i+1;
         // insert the value
         hm_set(hmap, keys[i],ins_vals[i]);
-        printf("i = %d key=%lu val=%u\n", i, keys[i], ins_vals[i]);
+        printf("i=%d key=%lu val=%u\n", i, keys[i], ins_vals[i]);
         TESTERRSUCCESS("hm fill up", hmap);
+
         uint16_t out_val = UINT16_MAX;
+        printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
         hm_get(hmap, keys[i], &out_val);
-        printf("i = %d key = %lx val=%x\n", i, keys[i], out_val);
         TESTERRSUCCESS("hm query", hmap);
         TEST("hm query result", out_val == ins_vals[i]);
     }
@@ -39,7 +40,7 @@ int main(){
         // insert the value
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], &out_val);
-        printf("i = %d key = %lx val=%x\n", i, keys[i], out_val);
+        printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
         TESTERRSUCCESS("hm query", hmap);
         TEST("hm query result", out_val == ins_vals[i]);
     }
