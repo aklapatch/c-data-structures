@@ -4,7 +4,7 @@
 
 #define TEST(label, expression)\
     do{\
-        printf("Test %s\n", label);\
+        printf("Test '%s'\n", label);\
         printf("Testing: (%s)", #expression);\
         assert(expression);\
         printf(": ok\n\n");\

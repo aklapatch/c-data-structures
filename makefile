@@ -5,6 +5,8 @@ tests: dynarr hmap
 
 hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(CFLAGS) src/hmap_test.c -o $(OUTDIR)/hmap_test
+
+hash_test: src/hash_test.c src/ahash.h
 	$(CC) $(CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
 
 dynarr: src/test_main.c src/test_helpers.h src/dynarr.h src/alloc_fail_tests.c

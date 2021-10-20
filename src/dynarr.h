@@ -13,6 +13,7 @@
 #define C_DS_REALLOC realloc
 #endif
 
+#define C_DS_MALLOC(x) C_DS_REALLOC(NULL, x)
 #define C_DS_FREE(x)\
     do{\
         void * __out_ptr = C_DS_REALLOC((x), 0);\
@@ -110,11 +111,12 @@ typedef enum {
 typedef enum {
     ds_dynarr= 0,
     ds_hm,
+    ds_shm,
 } ds_type;
 
 typedef struct c_ds_info {
     uintptr_t len,cap;
-    ds_error_e err; // if an error has occurred
+    uint8_t err; // if an error has occurred
     bool outside_mem,hash_table;  // if we are using memory from outside of dynarr funcions.
 } c_ds_info;
 

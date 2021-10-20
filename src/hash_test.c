@@ -1,31 +1,28 @@
-#include"hmap.h"
+#include "ahash.h"
+#include <stdio.h>  
 #define ROUNDS (2*UINT16_MAX)
 
 int main(){
-    // test distribution of a certain function
+    // test distribution of the ahash function
 
-    uint64_t matches[ROUNDS] = {0};
-    uint32_t total_different_vals = 0;
-    uint32_t collisions = 0;
+    uint64_t start_val = 0xf32341234;
+    uint64_t test_val = ahash_buf((uint8_t*)&start_val, sizeof(start_val));
+    uint64_t final_second_hash = ahash_buf((uint8_t*)&test_val, sizeof(test_val));
+    printf("test_val = %lx final_second_hash = %lx\n", test_val, final_second_hash);
+
+    uint64_t hashes[ROUNDS] = {0};
     for (uint64_t i = 0; i < ROUNDS; ++i){
-        bool collision_found = false;
-        uint64_t hash = ahash_buf((uint8_t*)&i, sizeof(i));
-
-        // see if any other matches have been found yet
-        for (uint32_t i = 0; i < total_different_vals; ++i){
-            if (hash == matches[i]){
-                printf("Collision found! %lx\n", hash);
-                collision_found = true;
-                collisions++;
-                break;
+        hashes[i] = ahash_buf((uint8_t*)&i, sizeof(i));
+    }
+    for (uint64_t i = 0; i < ROUNDS; ++i){
+        //compare different matches and see if one was found
+        for (uint64_t j = 0; j < ROUNDS; ++j){
+            if (j != i && hashes[i] == hashes[j]){
+                printf("Collision found! %lx i = %lu j = %lu\n", hashes[i], i,j);
+                return 1;
             }
         }
-        if (!collision_found){
-            matches[total_different_vals] = hash;
-            total_different_vals++;
-        }
     }
-    printf("Total collisions: %u\n", collisions);
 
     return 0;
 }
