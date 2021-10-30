@@ -30,7 +30,7 @@ typedef struct {
     uintptr_t indices[GROUP_SIZE]; // when the bucket is full, this becomes a remap entry
     uintptr_t remap_i; // The index of the next bucket to check 
     uint8_t val_meta; // bit set for value taken
-    uint8_t key_meta; 
+    uint8_t key_meta; // bit cleared for direct hit, set for indirect hit
     uint8_t num; // how many keys are in the bucket
 } hash_bucket;
 
@@ -167,6 +167,7 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
     uintptr_t new_cap = next_pow2(item_count);
 
+    uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
     uintptr_t num_buckets = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
     uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
@@ -177,12 +178,12 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
         return ptr;
     }
 
-    hash_bucket* bucket_ptr = C_DS_REALLOC(inf_ptr->buckets, bucket_size);
+    hash_bucket *old_bucket_ptr = inf_ptr->buckets;
+    hash_bucket *bucket_ptr = C_DS_REALLOC(NULL, bucket_size);
     if (bucket_ptr == NULL){
         hm_set_err(ptr, ds_alloc_fail);
         return ptr;
     }
-        
 
     // associate the key pointer with the new structure
     inf_ptr->buckets = bucket_ptr;
@@ -204,16 +205,37 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
         inf_ptr->num = 0;
     } else {
         // set the new meta to empty
-        uintptr_t old_len = hm_cap(ptr);
-        for (uintptr_t i = old_len/GROUP_SIZE; i < num_buckets; ++i){
+        for (uintptr_t i = 0; i < num_buckets; ++i){
             for (uint16_t j = 0; j < GROUP_SIZE; ++j){
                 inf_ptr->buckets[i].indices[j] = DEX_TS;
             }
             inf_ptr->buckets[i].val_meta = 0;
             inf_ptr->buckets[i].key_meta = 0;
+            inf_ptr->buckets[i].remap_i = UINTPTR_MAX;
         }
 
         // TODO re-insert keys, but leave the indexes since they're okay
+        for (uintptr_t num_items = inf_ptr->num; num_items > 0; --num_items){
+            // search the old key structure for keys
+            for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
+                for (uint8_t i = 0; i < GROUP_SIZE; ++i){
+                    if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS &&
+                        old_bucket_ptr[bucket_i].indices[i] != DEX_REMAP){
+                        // hash the key here and re-insert it into the new array.
+                        uint64_t key = old_bucket_ptr[bucket_i].keys[i];
+                        uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
+
+                        uint64_t hash = C_DS_HASH_FUNC(&key, sizeof(key));
+                        uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+
+                        uintptr_t bucket_i = truncated_hash;
+
+                    }
+                }
+            }
+
+
+        }
 
 
         // free old memory
@@ -273,8 +295,18 @@ uintptr_t hm_raw_insert_key(
         }
 
         uint8_t i;
+        bool found_one_slot = false;
         for (i = 0; i < GROUP_SIZE; ++i){
             if (buckets[bucket_i].indices[i] == DEX_TS){
+
+                // the second try around, we need to make a remap entry. Be
+                // sure we have space to insert 2 keys to insert the remap entry into another bucket
+                // so skip inserting the key this time and look for another slot
+                if (tries < total_tries && !found_one_slot){
+                    found_one_slot = true;
+                    continue;
+                }
+
                 // set the key
                 buckets[bucket_i].keys[i] = key;
 
@@ -303,9 +335,10 @@ uintptr_t hm_raw_insert_key(
         direct_hit = false;
     }
     // give up
-    if (tries == 0){
+    if (tries == 0 || in_bucket_i == UINT8_MAX || key_final_bucket_i == DEX_TS){
         return UINTPTR_MAX;
     }
+
     // start looking through everything (linear search)
     for (uintptr_t i = 0, num_buckets = hm_cap(ptr)/GROUP_SIZE;
          i < num_buckets && ret_index == DEX_TS; ++i){
@@ -320,7 +353,8 @@ uintptr_t hm_raw_insert_key(
         // set the value slot to show it's taken
         buckets[key_final_bucket_i].indices[in_bucket_i] = ret_index;
         uintptr_t val_bucket = ret_index/GROUP_SIZE;
-        buckets[val_bucket].val_meta |= 1 << in_bucket_i; 
+        uint8_t val_slot_num = ret_index - val_bucket*GROUP_SIZE;
+        buckets[val_bucket].val_meta |= 1 << val_slot_num; 
     } else {
         return UINTPTR_MAX;
     }
@@ -356,6 +390,7 @@ uintptr_t hm_raw_insert_key(
             // The hash table's in a pretty bad state if this doesn't work
             // I need to find a better abstraction so I can recurse to 
             // insert keys better.
+            // Maybe fixed, changed to search for space for 2 keys.
             return UINTPTR_MAX;
         }
     }
@@ -408,11 +443,19 @@ uintptr_t hm_find_val_i(void *ptr, uint64_t key){
 
 #define hm_get(ptr, key, val_to_set)\
     do{\
-        uintptr_t __hm_found_dex = hm_find_val_i(ptr, key);\
-        if (__hm_found_dex == UINTPTR_MAX){\
-            hm_set_err(ptr, ds_not_found);\
-        } else {\
-            val_to_set = ptr[__hm_found_dex]; \
-            hm_set_err(ptr, ds_success);\
+        for (uint8_t _grow_tries = 3; _grow_tries > 0; --_grow_tries){\
+            uintptr_t __hm_found_dex = hm_find_val_i(ptr, key);\
+            if (__hm_found_dex == UINTPTR_MAX){\
+                hm_set_err(ptr, ds_not_found);\
+
+                hm_realloc(ptr, hm_num(ptr) + 1);\
+                // exit if reallocation fails
+                if (hm_is_err_set(ptr)){
+                    break;
+                }
+            } else {\
+                val_to_set = ptr[__hm_found_dex];\
+                hm_set_err(ptr, ds_success);\
+            }\
         }\
     }while(0)
