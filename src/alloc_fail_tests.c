@@ -1,32 +1,34 @@
 #include<stddef.h>
 // define a function that just returns NULL to simulate allocation failure
-void * bad_realloc(void*ptr, size_t size){
+void *bad_realloc(void*ptr, size_t size){
     return NULL;
 }
 
-#define C_DS_REALLOC bad_realloc
 #include "dynarr.h"
 #include <assert.h>
 #include "test_helpers.h"
 
 int main(){
 
-    c_ds_info buf[2] = {0};
     
-    uint8_t *ptr = dynarr_alloc(uint8_t, 7);
+    uint8_t *ptr = NULL;
+    dynarr_init(ptr, 7, bad_realloc);
     TEST("dynarr_alloc() fail", ptr == NULL);
 
     // overlay the pointer over a struct so that it is not null, but has
     // memory to hold errors
-    ptr = (uint8_t*)&buf[1];
+    dynarr_inf buf[1] = {0};
+    dynarr_init_from_buf(ptr, buf, sizeof(buf), bad_realloc);
 
-    dynarr_set_cap(ptr, 17);
+    uintptr_t too_big = 2*sizeof(buf);
+
+    dynarr_set_cap(ptr, too_big);
     TESTERRFAIL("dynarr_set_cap() alloc fail", ptr, ds_alloc_fail);
 
-    dynarr_set_len(ptr, 30);
+    dynarr_set_len(ptr, too_big);
     TESTERRFAIL("dynarr_set_len() alloc fail", ptr, ds_alloc_fail);
 
-    dynarr_maybe_grow(ptr, 32);
+    dynarr_maybe_grow(ptr, too_big);
     TESTERRFAIL("dynarr_maybe_grow() alloc fail", ptr, ds_alloc_fail);
 
     dynarr_append(ptr, 72);

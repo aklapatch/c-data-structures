@@ -13,6 +13,12 @@ dynarr: src/test_main.c src/test_helpers.h src/dynarr.h src/alloc_fail_tests.c
 	$(CC) $(CFLAGS) src/test_main.c -o $(OUTDIR)/test
 	$(CC) $(CFLAGS) src/alloc_fail_tests.c -o $(OUTDIR)/alloc_fail_tests
 
+dynarr_test: dynarr
+	$(OUTDIR)/test
+	echo "Starting allocation failure tests!"
+	echo "---------------------------------------------------------------------"
+	$(OUTDIR)/alloc_fail_tests
+
 
 outdir:
 	mkdir -p $(OUTDIR)
