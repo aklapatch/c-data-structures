@@ -199,7 +199,8 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
         if (base_ptr == NULL && !outside_mem){
             new_ptr->num = 0;
         } else {
-            new_ptr->num = old_num;
+            // change the num to be lower if the cap is lower than it
+            new_ptr->num = (old_num > item_count) ? item_count: old_num;
         }
 
         new_ptr->err = ds_success;
