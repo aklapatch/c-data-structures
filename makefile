@@ -8,6 +8,7 @@ hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
 
 hash_test: src/hash_test.c src/ahash.h
 	$(CC) $(CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
+	$(OUTDIR)/hash_test
 
 dynarr: src/dynarr_test.c src/test_helpers.h src/dynarr.h 
 	$(CC) $(CFLAGS) src/dynarr_test.c -o $(OUTDIR)/dynarr_test

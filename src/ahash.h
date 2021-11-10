@@ -52,7 +52,8 @@ void ahash_update_128(uint64_t * buf, uint64_t * pad, uint64_t data_in[2]){
     ahash_update(buf, pad, data_in[1]);
 }
 
-uint64_t ahash_buf(uint8_t *data, size_t data_len){
+uint64_t ahash_buf(void *in_data, size_t data_len){
+    uint8_t *data = (uint8_t*)in_data;
     uint64_t buffer = C_DS_HASH_SEED1, pad = C_DS_HASH_SEED2;
 
     buffer = ahash_wrapping_mul(C_DS_AHASH_MULTIPLE, ahash_wrapping_add((uint64_t)data_len, buffer));
