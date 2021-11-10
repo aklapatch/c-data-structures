@@ -1,55 +1,41 @@
 #pragma once
 #include "dynarr.h"
-#include "ahash.h"
 
 // tombstone (empty) marker
 #define DEX_TS ((uintptr_t)UINTPTR_MAX)
 
-// REMAP maker. In this case, the key holds the next bucket to go to
-#define DEX_REMAP ((uintptr_t)UINTPTR_MAX - 1)
-
 // used to find remap entries
 #define HASH_MULT_COEFF (2654435769)
 
-// switch to horton table
-// keep keys and indices
-// maybe ditch list_meta
-// for horton tables, the last entry gets converted to a remap entry if the bucket fills up
-// keys hash to buckets (need to see what I want to do regarding the hash bits (truncate/keep))
-// usual horton tables have a second hash to jump another bucket, but I want to do something different if possible
-// If I can't do something different, then I can just re-hash the untruncated hash of the key.
-// i still need val_meta since values underneath are still up for grabs
-// The searching strategy for value slots will be simple, search the bucket, then  move onto the next bucket and search that
-// use all the hash bits to hash to a bucket (buckets must be pow2, which sounds really bad, and probably is)
-// Actually, I think we'll be fine. # of buckets will always be pow2/8 which should still be a pow2 (except if size is 8, which is not necessary)
-// UINTPTR_MAX -1 can be the sentinel value for  a remap entry 
-// On insertion, check the end entry and if it is a remap entry, then it's full.
 #define GROUP_SIZE (8)
+#define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 typedef struct {
-    uint64_t keys[GROUP_SIZE]; // when you have a remap entry, then 
-    uintptr_t indices[GROUP_SIZE]; // when the bucket is full, this becomes a remap entry
-    uintptr_t remap_i; // The index of the next bucket to check 
+    // keys, indices for values, and an index for a next bucket to check
+    uintptr_t keys[GROUP_SIZE], indices[GROUP_SIZE], remap_i; 
     uint8_t val_meta; // bit set for value taken
-    uint8_t key_meta; // bit cleared for direct hit, set for indirect hit
+    uint8_t direct_hit; // if the key is a direct hit or not
+    uint8_t key_type; // 0 for numeric key, 1 for c string key.
     uint8_t num; // how many keys are in the bucket
 } hash_bucket;
 
-/// Too complex for now
-// we can use the top bit of the index member to signify if the value slot it open. 
-// Then there are a couple values we can use as markers
-// top bit of number (1 << (sizeof(uintptr_t)*8 - 1)) mask for uintptr_t
-// if bit is set then the slot is taken
-// Be careful to |= the numbers when assigning them., and to clear them properly
+// hash function prototype
+typedef uintptr_t (*hash_fn_t)(void *, size_t);
 
 typedef struct hm_info{
+    hash_fn_t hash_func;
+    realloc_fn_t realloc_fn;
     // holds the metadata for the hash table.
     hash_bucket* buckets;
     uintptr_t cap,num;
-    uint8_t err,outside_mem,hash_table;
+    uint8_t err,outside_mem;
 } hm_info;
 
 hm_info * hm_info_ptr(void * ptr){
     return (ptr == NULL) ? NULL : (hm_info*)ptr - 1;
+}
+
+hash_fn hm_hash_func(void *ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
 }
 
 hash_bucket* hm_bucket_ptr(void * ptr){
@@ -85,6 +71,54 @@ bool hm_is_err_set(void * ptr){
 
 char * hm_err_str(void *ptr){
     return ds_get_err_str(hm_err(ptr));
+}
+
+void hm_free(void * ptr){
+    if (ptr != NULL){
+        realloc_fn_t realloc_fn = hm_realloc_fn(ptr);
+        void* __absorb_realloc__ptr = realloc_fn(hm_info(ptr), 0);
+        (void)__absorb_realloc__ptr;
+        ptr = NULL;
+    }
+}
+
+void *_hm_init(size_t num_items, size_t item_size, realloc_fn_t realloc_fn, hash_fn_t hash_func){
+    hm_info *ret_ptr = realloc_fn(NULL, num_items*item_size + sizeof(*hm_info));
+    if (ret_ptr == NULL) {return NULL;}
+
+    // don't set cap until we have buckets allocated
+    ret_ptr->outside_mem = false;
+    ret_ptr->num = 0;
+    ret_ptr->realloc_fn = realloc_fn;
+    ret_ptr->hash_func = hash_func;
+
+    // round up to the number of buckets needed
+    uintptr_t num_buckets = (num_items + (GROUP_SIZE - 1))/GROUP_SIZE;
+    bucket *buckets = realloc_fn(NULL, num_buckets*sizeof(bucket));
+    if (buckets == NULL){
+        ret_ptr->err = ds_alloc_fail;
+        ret_ptr->cap = 0;
+        return NULL;
+    }
+
+    ret_ptr->cap = num_items;
+    ret_ptr->buckets = buckets;
+
+    // init all the buckets
+    for (uintptr_t i = 0; i < num_buckets; ++i){
+        // set the TS value for indices
+        for (uint8_t j = 0;  < GROUP_SIZE; ++j){
+            buckets[i].indices[j] = DEX_TS;
+        }
+        buckets[i].remap_i = 0;
+        buckets[i].val_meta = 0;
+        buckets[i].direct_hit = 0;
+        buckets[i].key_type = 0;
+        buckets[i].num = 0;
+    }
+
+    ++ret_ptr;
+    return ret_ptr;
 }
 
 // API:
@@ -156,7 +190,6 @@ uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
     return num & ((hm_cap(ptr)/GROUP_SIZE) - 1);
 }
 
-#define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 
 // The meta table in the info struct needs to be allocated too
 void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
