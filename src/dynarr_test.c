@@ -112,7 +112,6 @@ int main(){
     uint8_t appendn_old_val = ptr[pre_append_len];
     uintptr_t pre_appendn_len = dynarr_num(ptr);
     dynarr_appendn(ptr, vals, sizeof(vals));
-    print_vals(ptr);
     TEST("dynarr_appendn()", memcmp(&ptr[pre_appendn_len], vals, sizeof(vals)) == 0);
     TEST("dynarr_appendn()", pre_appendn_len + sizeof(vals) == dynarr_num(ptr));
     TEST("dynarr_appendn() old val preserved", ptr[pre_append_len] == appendn_old_val);
