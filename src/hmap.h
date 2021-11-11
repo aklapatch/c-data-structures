@@ -200,6 +200,79 @@ uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
     return num & ((hm_cap(ptr)/GROUP_SIZE) - 1);
 }
 
+// basically an insert, but we don't need to look for a dex slot
+static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
+    uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
+    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+
+    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
+
+    // find a bucket that's not full
+    bool direct_hit = true;
+    uint8_t total_tries = 4, tries;
+    uintptr_t step = 1;
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    uintptr_t bucket_i = truncated_hash;
+    // done if we insert a key
+    uintptr_t key_final_bucket_i = UINTPTR_MAX;
+    uint8_t in_bucket_i = UINT8_MAX;
+    for (tries = total_tries; tries > 0; --tries){
+        for(; buckets[bucket_i].remap_i != UINTPTR_MAX; bucket_i = buckets[bucket_i].remap_i){
+            direct_hit = false;
+        }
+
+        uint8_t i;
+        for (i = 0; i < GROUP_SIZE; ++i){
+            if (buckets[bucket_i].indices[i] == DEX_TS){
+
+                // set the key
+                buckets[bucket_i].keys[i] = key;
+                buckets[bucket_i].indices[i] = dex;
+
+                // clear the meta bit for this entry
+                if (direct_hit){
+                    // only clear one meta bit
+                    uint8_t meta_mask = ~(uint8_t)(1 << i);
+                    buckets[bucket_i].direct_hit &= meta_mask;
+                } else {
+                    buckets[bucket_i].direct_hit |= 1 << i ;
+                }
+                break;
+            }
+        }
+
+        if (buckets[bucket_i].keys[i] == key){
+            in_bucket_i = i;
+            key_final_bucket_i = bucket_i;
+            break;
+        }
+        // probe for a new bucket to check
+        uintptr_t new_bucket_i = bucket_i + step;
+        step += 1;
+        bucket_i = truncate_to_cap(ptr, new_bucket_i);
+        direct_hit = false;
+    }
+    // give up
+    if (tries == 0 || in_bucket_i == UINT8_MAX || key_final_bucket_i == DEX_TS){
+        return UINTPTR_MAX;
+    }
+
+    // if we need to make a REMAP entry, then we need to re-insert the REMAP
+    // entry into a new bucket
+    if (bucket_i != truncated_hash){
+        // try to find a place where the remap entry breaks, and set that bucket 
+        // to point to the new bucket
+        uintptr_t other_bucket_i = truncated_hash;
+        for(; buckets[other_bucket_i].remap_i != UINTPTR_MAX; 
+            other_bucket_i = buckets[other_bucket_i].remap_i){}
+
+        // map to the new bucket if necessary
+        if (bucket_i != other_bucket_i){
+            buckets[other_bucket_i].remap_i = bucket_i;
+        }
+    }
+    return key_final_bucket_i*GROUP_SIZE + in_bucket_i;
+}
 
 void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
@@ -207,6 +280,7 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
     hm_info *base_ptr = hm_info_ptr(ptr);
 
+    uintptr_t old_cap = hm_cap(ptr);
     uintptr_t new_cap = next_pow2(item_count);
 
     uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
@@ -219,6 +293,7 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
     hm_info * inf_ptr = realloc_fn(base_ptr, data_size);
     if (inf_ptr == NULL){
         hm_set_err(ptr, ds_alloc_fail);
+        // old pointer is still good, return that
         return ptr;
     }
 
@@ -256,36 +331,50 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
                 inf_ptr->buckets[i].indices[j] = DEX_TS;
             }
             inf_ptr->buckets[i].remap_i = UINTPTR_MAX;
-            inf_ptr->buckets[i].val_meta = 0;
+            // keep the which value slots are taken
+            if (i < old_cap){
+                inf_ptr->buckets[i].val_meta = old_bucket_ptr[i].val_meta;
+            } else {
+                inf_ptr->buckets[i].val_meta = 0;
+            }
             inf_ptr->buckets[i].direct_hit = 0;
             inf_ptr->buckets[i].key_type = 0;
             inf_ptr->buckets[i].num = 0;
         }
+        ++inf_ptr;
 
         // TODO re-insert keys, but leave the indexes since they're okay
-        for (uintptr_t num_items = inf_ptr->num; num_items > 0; --num_items){
-            // search the old key structure for keys
-            for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
-                for (uint8_t i = 0; i < GROUP_SIZE; ++i){
-                    if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
-                        // hash the key here and re-insert it into the new array.
-                        uint64_t key = old_bucket_ptr[bucket_i].keys[i];
-                        uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
+        uintptr_t num_items = hm_num(inf_ptr);
+        // search the old key structure for keys
+        for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
+            for (uint8_t i = 0; i < GROUP_SIZE; ++i){
+                if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
+                    // hash the key here and re-insert it into the new array.
+                    uint64_t key = old_bucket_ptr[bucket_i].keys[i];
+                    uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
 
-                        uint64_t hash = inf_ptr->hash_func(&key, sizeof(key));
-                        uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
-
-                        uintptr_t bucket_i = truncated_hash;
-
+                    uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
+                    // upon error, revert the indices and return a failure
+                    if (ret == UINTPTR_MAX){
+                        hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
+                        // free the old memory
+                        (void)realloc_fn(bucket_ptr, 0);
+                        goto done;
+                    } 
+                    --num_items;
+                    if (num_items == 0){
+                        goto done;
                     }
                 }
             }
-
-
         }
-
     }
-    ++inf_ptr;
+
+    // success, free old buckets
+    (void)realloc_fn(old_bucket_ptr, 0);
+
+done:
+    hm_set_err(inf_ptr, ds_success);
     return inf_ptr;
 }
 
@@ -305,6 +394,8 @@ uintptr_t hm_raw_insert_key(
 
     // hash the key and start looking for slots in the bucket it hashes to
     uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
+    // true if key was replaced
+    bool replace = false;
 
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i = truncated_hash;
@@ -342,7 +433,11 @@ uintptr_t hm_raw_insert_key(
         uint8_t i;
         bool found_one_slot = false;
         for (i = 0; i < GROUP_SIZE; ++i){
-            if (buckets[bucket_i].indices[i] == DEX_TS){
+            if (buckets[bucket_i].indices[i] == DEX_TS || 
+                // allow replacing old keys
+                buckets[bucket_i].keys[i] == key){
+
+                replace = buckets[bucket_i].keys[i] == key;
 
                 // set the key
                 buckets[bucket_i].keys[i] = key;
@@ -412,6 +507,9 @@ uintptr_t hm_raw_insert_key(
         }
     }
 
+    if (!replace){
+        hm_info_ptr(ptr)->num++;
+    }
     return ret_index;
 }
 

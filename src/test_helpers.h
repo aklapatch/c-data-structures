@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define ITEMS_IN_ARR(arr) (sizeof((arr))/sizeof((arr)[0]))
 #define TEST(label, expression)\
     do{\
         printf("[Test]: (%s): ", label);\

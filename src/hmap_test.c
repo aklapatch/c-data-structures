@@ -47,5 +47,17 @@ int main(){
         TEST("hm query result", out_val == ins_vals[i]);
     }
 
+    hm_realloc(hmap, 64);
+    TESTERRSUCCESS("hm realloc", hmap);
+    // try resizing the hmap and see if all the key are still there
+    for (int i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
+        // insert the value
+        uint16_t out_val = UINT16_MAX;
+        hm_get(hmap, keys[i], out_val);
+        printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
+        TESTERRSUCCESS("hm realloc query", hmap);
+        TEST("hm realloc query result", out_val == ins_vals[i]);
+    }
+
     return 0;
 }
