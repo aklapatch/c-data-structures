@@ -3,24 +3,15 @@
 #include <stddef.h>
 #include <string.h>
 
-#ifndef C_DS_HASH_FUNC
 // This code is derived from the ahash hash function.
 // It's written in rust, so I'm not sure I need to include 
 // the license or not since I'm porting it to C
 // https://github.com/tkaitchuck/aHash/blob/master/src/fallback_hash.rs
-#ifndef C_DS_HASH_SEED1 // pi in hex
-#define C_DS_HASH_SEED1 (0x3141592653589793)
-#endif
+#define AHASH_SEED1 (0x3141592653589793)
 
-#ifndef C_DS_HASH_SEED2 // e in hex
-#define C_DS_HASH_SEED2 (0x2718281828459045)
-#endif
+#define AHASH_SEED2 (0x2718281828459045)
 
-#ifndef C_DS_AHASH_MULTIPLE
-#define C_DS_AHASH_MULTIPLE (6364136223846793005)
-#endif
-
-#define C_DS_HASH_FUNC ahash_buf
+#define AHASH_MULTIPLE (6364136223846793005)
 
 uint64_t ahash_wrapping_mul(uint64_t a, uint64_t b){
     return (a*b) % UINT64_MAX;
@@ -42,8 +33,8 @@ uint64_t ahash_rotl(uint64_t n, int32_t c){
 }
 
 void ahash_update(uint64_t * buf, uint64_t * pad, uint64_t data_in){
-    uint64_t tmp = ahash_wrapping_mul( (data_in ^ *buf), C_DS_AHASH_MULTIPLE );
-    *pad = ahash_wrapping_mul(ahash_rotl((*pad ^ tmp), 8) , C_DS_AHASH_MULTIPLE);
+    uint64_t tmp = ahash_wrapping_mul( (data_in ^ *buf), AHASH_MULTIPLE );
+    *pad = ahash_wrapping_mul(ahash_rotl((*pad ^ tmp), 8) , AHASH_MULTIPLE);
     *buf = ahash_rotl((*buf ^ *pad), 24);
 }
 
@@ -54,9 +45,9 @@ void ahash_update_128(uint64_t * buf, uint64_t * pad, uint64_t data_in[2]){
 
 uint64_t ahash_buf(void *in_data, size_t data_len){
     uint8_t *data = (uint8_t*)in_data;
-    uint64_t buffer = C_DS_HASH_SEED1, pad = C_DS_HASH_SEED2;
+    uint64_t buffer = AHASH_SEED1, pad = AHASH_SEED2;
 
-    buffer = ahash_wrapping_mul(C_DS_AHASH_MULTIPLE, ahash_wrapping_add((uint64_t)data_len, buffer));
+    buffer = ahash_wrapping_mul(AHASH_MULTIPLE, ahash_wrapping_add((uint64_t)data_len, buffer));
 
     if (data_len > 8){
         if (data_len > 16){
@@ -96,6 +87,5 @@ uint64_t ahash_buf(void *in_data, size_t data_len){
     }
 
     uint32_t rot = buffer & 63;
-    return ahash_rotl(ahash_wrapping_mul(C_DS_AHASH_MULTIPLE, buffer) ^ pad, rot);
+    return ahash_rotl(ahash_wrapping_mul(AHASH_MULTIPLE, buffer) ^ pad, rot);
 }
-#endif

@@ -1,10 +1,12 @@
 #include"hmap.h"
+#include "ahash.h"
 #include "test_helpers.h"
+#include <stdlib.h>
 
 int main(){
     
     uint16_t *hmap = NULL;
-    hm_realloc(hmap, 32);
+    hm_init(hmap, 32, realloc, ahash_buf);
 
     TEST("hm_num @ init", hm_num(hmap) == 0);
     TEST("hm_cap @ init w 32", hm_cap(hmap) == 32);

@@ -129,6 +129,8 @@ void *_hm_init(size_t num_items, size_t item_size, realloc_fn_t realloc_fn, hash
     return ret_ptr;
 }
 
+#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = _hm_init(num_items, sizeof(*ptr), realloc_fn, hash_func)
+
 // API:
 // - find (key) -> index
 // - set (key, val) -> err
@@ -199,7 +201,6 @@ uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
 }
 
 
-// The meta table in the info struct needs to be allocated too
 void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 
     item_count = (item_count < 2*GROUP_SIZE) ? 2*GROUP_SIZE : item_count;
@@ -295,14 +296,15 @@ void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 // also returns whether this is a secondary or primary hit
 uintptr_t hm_raw_insert_key(
         void *ptr, 
-        uint64_t key)
+        uint64_t key,
+        uintptr_t *dex_out)
 {
     if (hm_num(ptr) == hm_cap(ptr)){
         return UINTPTR_MAX;
     }
 
     // hash the key and start looking for slots in the bucket it hashes to
-    uint64_t hash = C_DS_HASH_FUNC((uint8_t*)&key,sizeof(key));
+    uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
 
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i = truncated_hash;
@@ -319,7 +321,7 @@ uintptr_t hm_raw_insert_key(
     for (tries = total_tries; tries > 0; --tries){
 
         // find a bucket that's not full
-        while (buckets[bucket_i].indices[GROUP_SIZE - 1] == DEX_REMAP){
+        while (buckets[bucket_i].remap_i != UINTPTR_MAX){
             // look for empty value slots while we're here
             if (ret_index == DEX_TS){
                 uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
@@ -327,7 +329,7 @@ uintptr_t hm_raw_insert_key(
                     ret_index = bucket_i*GROUP_SIZE + slot;
                 }
             }
-            bucket_i = buckets[bucket_i].keys[GROUP_SIZE - 1];
+            bucket_i = buckets[bucket_i].remap_i;
             direct_hit = false;
         }
         if (ret_index == DEX_TS){
@@ -342,14 +344,6 @@ uintptr_t hm_raw_insert_key(
         for (i = 0; i < GROUP_SIZE; ++i){
             if (buckets[bucket_i].indices[i] == DEX_TS){
 
-                // the second try around, we need to make a remap entry. Be
-                // sure we have space to insert 2 keys to insert the remap entry into another bucket
-                // so skip inserting the key this time and look for another slot
-                if (tries < total_tries && !found_one_slot){
-                    found_one_slot = true;
-                    continue;
-                }
-
                 // set the key
                 buckets[bucket_i].keys[i] = key;
 
@@ -357,9 +351,9 @@ uintptr_t hm_raw_insert_key(
                 if (direct_hit){
                     // only clear one meta bit
                     uint8_t meta_mask = ~(uint8_t)(1 << i);
-                    buckets[bucket_i].key_meta &= meta_mask;
+                    buckets[bucket_i].direct_hit &= meta_mask;
                 } else {
-                    buckets[bucket_i].key_meta |= 1 << i ;
+                    buckets[bucket_i].direct_hit |= 1 << i ;
                 }
                 break;
             }
@@ -395,6 +389,7 @@ uintptr_t hm_raw_insert_key(
     if (ret_index != DEX_TS && in_bucket_i != UINT8_MAX && key_final_bucket_i != DEX_TS){
         // set the value slot to show it's taken
         buckets[key_final_bucket_i].indices[in_bucket_i] = ret_index;
+
         uintptr_t val_bucket = ret_index/GROUP_SIZE;
         uint8_t val_slot_num = ret_index - val_bucket*GROUP_SIZE;
         buckets[val_bucket].val_meta |= 1 << val_slot_num; 
@@ -404,37 +399,16 @@ uintptr_t hm_raw_insert_key(
 
     // if we need to make a REMAP entry, then we need to re-insert the REMAP
     // entry into a new bucket
-    if (bucket_i != truncated_hash && buckets[truncated_hash].indices[GROUP_SIZE - 1] != DEX_REMAP){
-        uint64_t old_key = buckets[truncated_hash].keys[GROUP_SIZE - 1];
-        uintptr_t old_dex = buckets[truncated_hash].indices[GROUP_SIZE - 1];
+    if (bucket_i != truncated_hash){
+        // try to find a place where the remap entry breaks, and set that bucket 
+        // to point to the new bucket
+        uintptr_t other_bucket_i = truncated_hash;
+        for(; buckets[other_bucket_i].remap_i != UINTPTR_MAX; 
+            other_bucket_i = buckets[other_bucket_i].remap_i){}
 
-        // set this to a remap
-        buckets[truncated_hash].keys[GROUP_SIZE - 1] = bucket_i;
-        buckets[truncated_hash].indices[GROUP_SIZE - 1] = DEX_REMAP;
-
-        // check if we can use this new key at the bucket we just found:
-        uint8_t i;
-        for (i = 0; i < GROUP_SIZE; ++i){
-            if (buckets[bucket_i].indices[i] == DEX_TS){
-                // set the key
-                buckets[bucket_i].keys[i] = old_key;
-                buckets[bucket_i].indices[i] = old_dex;
-
-                // not a direct hit, set as such
-                buckets[bucket_i].key_meta |= 1 << i ;
-                break;
-            }
-        }
-        // done if we insert a key
-        if (buckets[bucket_i].keys[i] == old_key){
-
-        } else {
-            // TODO:
-            // The hash table's in a pretty bad state if this doesn't work
-            // I need to find a better abstraction so I can recurse to 
-            // insert keys better.
-            // Maybe fixed, changed to search for space for 2 keys.
-            return UINTPTR_MAX;
+        // map to the new bucket if necessary
+        if (bucket_i != other_bucket_i){
+            buckets[other_bucket_i].remap_i = bucket_i;
         }
     }
 
@@ -443,7 +417,8 @@ uintptr_t hm_raw_insert_key(
 
 #define hm_set(ptr, k, v)\
     do{\
-        uintptr_t __ds_empty_slot = hm_raw_insert_key(ptr, k);\
+        uintptr_t slot_i = UINTPTR_MAX;\
+        uintptr_t __ds_empty_slot = hm_raw_insert_key(ptr, k, &slot_i);\
         if (__ds_empty_slot != UINTPTR_MAX){\
             ptr[__ds_empty_slot] = v;\
             hm_set_err(ptr, ds_success); \
@@ -453,7 +428,7 @@ uintptr_t hm_raw_insert_key(
     }while(0)
 
 uintptr_t hm_find_val_i(void *ptr, uint64_t key){
-    uint64_t hash = C_DS_HASH_FUNC((uint8_t*)&key, sizeof(key));
+    uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i = truncated_hash;
 
@@ -464,7 +439,6 @@ uintptr_t hm_find_val_i(void *ptr, uint64_t key){
         // search the bucket, see if the key is there
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
             if (buckets[bucket_i].indices[i] != DEX_TS &&
-                buckets[bucket_i].indices[i] != DEX_REMAP &&
                 buckets[bucket_i].keys[i] == key){
 
                 // found the key for the val
@@ -475,8 +449,8 @@ uintptr_t hm_find_val_i(void *ptr, uint64_t key){
 
         // if you don't find it, check for a REMAP entry and see if there's another
         // bucket to check
-        if (buckets[bucket_i].indices[GROUP_SIZE - 1] == DEX_REMAP){
-            bucket_i = buckets[bucket_i].keys[GROUP_SIZE - 1];
+        if (buckets[bucket_i].remap_i != UINTPTR_MAX){
+            bucket_i = buckets[bucket_i].remap_i;
         } else {
             hm_set_err(ptr, ds_not_found);
             return UINTPTR_MAX;
@@ -485,20 +459,11 @@ uintptr_t hm_find_val_i(void *ptr, uint64_t key){
 }
 
 #define hm_get(ptr, key, val_to_set)\
-    do{\
-        for (uint8_t _grow_tries = 3; _grow_tries > 0; --_grow_tries){\
-            uintptr_t __hm_found_dex = hm_find_val_i(ptr, key);\
-            if (__hm_found_dex == UINTPTR_MAX){\
-                hm_set_err(ptr, ds_not_found);\
-
-                hm_realloc(ptr, hm_num(ptr) + 1);\
-                // exit if reallocation fails
-                if (hm_is_err_set(ptr)){
-                    break;
-                }
-            } else {\
-                val_to_set = ptr[__hm_found_dex];\
-                hm_set_err(ptr, ds_success);\
-            }\
+    do {\
+        uintptr_t __val_i = hm_find_val_i(ptr, key);\
+        if (__val_i != UINTPTR_MAX){\
+            val_to_set = ptr[__val_i];\
         }\
-    }while(0)
+    } while(0)
+
+
