@@ -431,7 +431,6 @@ uintptr_t hm_raw_insert_key(
         }
 
         uint8_t i;
-        bool found_one_slot = false;
         for (i = 0; i < GROUP_SIZE; ++i){
             if (buckets[bucket_i].indices[i] == DEX_TS || 
                 // allow replacing old keys
@@ -564,4 +563,39 @@ uintptr_t hm_find_val_i(void *ptr, uint64_t key){
         }\
     } while(0)
 
+void hm_del(void *ptr, uintptr_t key){
 
+    // hash the key and start looking for slots in the bucket it hashes to
+    uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
+
+    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+    uintptr_t bucket_i = truncated_hash;
+
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+
+    // find the bucket for this key and then see if the key is in the bucket
+    do {
+        // search the bucket, see if the key is there
+        for (uint8_t i = 0; i < GROUP_SIZE; ++i){
+            if (buckets[bucket_i].indices[i] != DEX_TS &&
+                buckets[bucket_i].keys[i] == key){
+                
+                // set the index to the TS
+                buckets[bucket_i].indices[i] = DEX_TS;
+
+                // found the key for the val
+                hm_set_err(ptr, ds_success);
+                return;
+            }
+        }
+
+        // if you don't find it, check for a REMAP entry and see if there's another
+        // bucket to check
+        if (buckets[bucket_i].remap_i != UINTPTR_MAX){
+            bucket_i = buckets[bucket_i].remap_i;
+        } else {
+            hm_set_err(ptr, ds_not_found);
+            return;
+        }
+    } while (true);
+}

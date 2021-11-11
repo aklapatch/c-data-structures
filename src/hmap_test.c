@@ -54,9 +54,19 @@ int main(){
         // insert the value
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
         TESTERRSUCCESS("hm realloc query", hmap);
         TEST("hm realloc query result", out_val == ins_vals[i]);
+    }
+    // try deleting all the keys and make sure they're gone
+    for (int i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
+        // insert the value
+        hm_del(hmap, keys[i]);
+        printf("i=%d key=%lx\n", i, keys[i]);
+        TESTERRSUCCESS("hm delete", hmap);
+
+        uint16_t out_val = UINT16_MAX;
+        hm_get(hmap, keys[i], out_val);
+        TESTERRFAIL("hm del query", hmap, ds_not_found);
     }
 
     return 0;
