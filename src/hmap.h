@@ -250,10 +250,8 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
     }
 
     // if the key matches, then pass out the index we already have
-    if (buckets[bucket_i].keys[key_i] == key){
-        if (buckets[bucket_i].indices[key_i] != DEX_TS){
+    if (buckets[bucket_i].keys[key_i] == key && buckets[bucket_i].indices[key_i] != DEX_TS){
             index = buckets[bucket_i].indices[key_i];
-        }
     } else if (buckets[bucket_i].indices[key_i] == DEX_TS){
         // set the key
         buckets[bucket_i].keys[key_i] = key;
@@ -448,16 +446,19 @@ uintptr_t hm_raw_insert_key(
     // if the key matches, then pass out the index we already have
     if (buckets[bucket_i].keys[key_i] == key && 
         buckets[bucket_i].indices[key_i] != DEX_TS){
+        printf("[debug] key replace %u\n", key);
         two_i_to_one(*key_dex_out, bucket_i, key_i);
         replace = true;
     } else if (buckets[bucket_i].indices[key_i] == DEX_TS){
         // set the key
+        printf("[debug] key set %u\n", key);
         buckets[bucket_i].keys[key_i] = key;
         two_i_to_one(*key_dex_out, bucket_i, key_i);
     } else if (buckets[bucket_i].jump_dists[key_i] == 0){
         //scan for openings
         uint8_t jump_i;
         // don't include UINT8_MAX to keep from causing a int overflow 
+        printf("[debug] key traverse %u\n", key);
         for (jump_i = 1; jump_i < UINT8_MAX; ++jump_i){
             uintptr_t dex_start;
             two_i_to_one(dex_start, bucket_i, key_i);

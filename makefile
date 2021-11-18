@@ -20,7 +20,6 @@ j_dist: src/jump_dist_test.c
 	$(CC) $(CFLAGS) src/jump_dist_test.c -o $(OUTDIR)/jump_dist_test
 	$(OUTDIR)/jump_dist_test
 
-
 outdir:
 	mkdir -p $(OUTDIR)
 
