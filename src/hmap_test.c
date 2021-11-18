@@ -26,20 +26,19 @@ int main(){
     uint64_t keys[31];
     for (int i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         ins_vals[i] = i;
-        keys[i] = i+1;
+        keys[i] = i;
         // insert the value
-        hm_set(hmap, keys[i],ins_vals[i]);
         printf("i=%d key=%lu val=%u\n", i, keys[i], ins_vals[i]);
+        hm_set(hmap, keys[i],ins_vals[i]);
         TESTERRSUCCESS("hm fill up", hmap);
 
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
         TESTERRSUCCESS("hm query", hmap);
         TEST("hm query result", out_val == ins_vals[i]);
     }
+    // make sure all values didn't get overwritten
     for (int i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
-        // insert the value
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
         printf("i=%d key=%lx val=%x\n", i, keys[i], out_val);
@@ -67,6 +66,23 @@ int main(){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
         TESTERRFAIL("hm del query", hmap, ds_not_found);
+    }
+
+    hm_free(hmap);
+    TEST("hmap free", hmap == NULL);
+
+    hm_init(hmap, 32, realloc, ahash_buf);
+    // insert a stupid number of keys and see if it still works
+    for (uint32_t i = 0; i < UINT16_MAX; ++i){
+        hm_set(hmap, i, i);
+        TESTERRSUCCESS("hm bulk insert", hmap);
+    }
+    for (uint32_t i = 0; i < UINT16_MAX; ++i){
+        uint16_t out_val = UINT16_MAX;
+        printf("key=%u\n", i);
+        hm_get(hmap, i, out_val);
+        TESTERRSUCCESS("hm bulk get after insert round 2", hmap);
+        TEST("hm get == set", i == out_val);
     }
 
     return 0;

@@ -16,6 +16,11 @@ dynarr: src/dynarr_test.c src/test_helpers.h src/dynarr.h
 dynarr_test: dynarr
 	$(OUTDIR)/dynarr_test
 
+j_dist: src/jump_dist_test.c
+	$(CC) $(CFLAGS) src/jump_dist_test.c -o $(OUTDIR)/jump_dist_test
+	$(OUTDIR)/jump_dist_test
+
+
 outdir:
 	mkdir -p $(OUTDIR)
 
