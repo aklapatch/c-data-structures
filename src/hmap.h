@@ -255,6 +255,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
     } else if (buckets[bucket_i].indices[key_i] == DEX_TS){
         // set the key
         buckets[bucket_i].keys[key_i] = key;
+        buckets[bucket_i].indices[key_i] = dex;
     } else if (buckets[bucket_i].jump_dists[key_i] == 0){
         //scan for openings
         uint8_t jump_i;
@@ -271,6 +272,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
             if (buckets[new_bucket_i].indices[new_key_i] == DEX_TS){
                 // set the key bub
                 buckets[new_bucket_i].keys[new_key_i] = key;
+                buckets[new_bucket_i].indices[new_key_i] = dex;
 
                 // set the other entry to redirect to here
                 buckets[bucket_i].jump_dists[key_i] = jump_i;
