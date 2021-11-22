@@ -1,4 +1,4 @@
-CFLAGS=-ggdb -Og -Wall -Wextra
+CFLAGS=-ggdb -Wall -Wextra
 OUTDIR=./build/
 
 tests: dynarr hmap

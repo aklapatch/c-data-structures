@@ -214,6 +214,16 @@ uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
     return num & (hm_cap(ptr) - 1);
 }
 
+uintptr_t add_jump_dist(
+        void *ptr,
+        uintptr_t bucket_i,
+        uint8_t key_i,
+        uint8_t dist){
+
+    uintptr_t jump_dist = hm_jump_dist(dist);
+    return truncate_to_cap(ptr, bucket_i*GROUP_SIZE + key_i + jump_dist);
+}
+
 // returns the dex in the bucket array where the key is placed 
 static uintptr_t find_slot(void *ptr, uintptr_t key, bool look_for_slot){
     return UINTPTR_MAX;
@@ -421,7 +431,6 @@ uintptr_t hm_raw_insert_key(
 
     hash_bucket* buckets = hm_bucket_ptr(ptr);
     bool direct_hit = true;
-    uintptr_t prev_dex;
 
     // if this bucket has a list attached to it, then get to the end of it
     while (buckets[bucket_i].keys[key_i] != key &&
@@ -435,7 +444,6 @@ uintptr_t hm_raw_insert_key(
                 ret_index = bucket_i*GROUP_SIZE + slot;
             }
         }
-        two_i_to_one(prev_dex, bucket_i, key_i);
         uintptr_t jump_dist = hm_jump_dist(buckets[bucket_i].jump_dists[key_i]);
 
         uintptr_t new_dex = truncate_to_cap(
@@ -448,7 +456,7 @@ uintptr_t hm_raw_insert_key(
     // if the key matches, then pass out the index we already have
     if (buckets[bucket_i].keys[key_i] == key && 
         buckets[bucket_i].indices[key_i] != DEX_TS){
-        printf("[debug] key replace %u\n", key);
+        printf("[debug] key replace %lu\n", key);
         two_i_to_one(*key_dex_out, bucket_i, key_i);
         replace = true;
     } else if (buckets[bucket_i].indices[key_i] == DEX_TS){
@@ -460,7 +468,7 @@ uintptr_t hm_raw_insert_key(
         //scan for openings
         uint8_t jump_i;
         // don't include UINT8_MAX to keep from causing a int overflow 
-        printf("[debug] key traverse %u\n", key);
+        printf("[debug] key traverse %lu\n", key);
         for (jump_i = 1; jump_i < UINT8_MAX; ++jump_i){
             uintptr_t dex_start;
             two_i_to_one(dex_start, bucket_i, key_i);
@@ -550,7 +558,6 @@ uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i; uint8_t key_i;
     one_i_to_two(truncated_hash, bucket_i, key_i);
-    uint8_t orig_key_i = key_i;
 
     hash_bucket* buckets = hm_bucket_ptr(ptr);
 
@@ -566,9 +573,11 @@ uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
         one_i_to_two(new_dex, bucket_i, key_i);
     }
     if (buckets[bucket_i].keys[key_i] == key && buckets[bucket_i].indices[key_i] != DEX_TS){
+        hm_set_err(ptr, ds_success);
         return buckets[bucket_i].indices[key_i];
     } 
     // no active key here
+    hm_set_err(ptr, ds_not_found);
     return UINTPTR_MAX;
 }
 
@@ -581,38 +590,61 @@ uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
     } while(0)
 
 void hm_del(void *ptr, uintptr_t key){
-
-    // hash the key and start looking for slots in the bucket it hashes to
-    uint64_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-
+    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
-    uintptr_t bucket_i = truncated_hash;
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_two(truncated_hash, bucket_i, key_i);
 
-    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    hash_bucket* buckets = hm_bucket_ptr(ptr);
 
-    // find the bucket for this key and then see if the key is in the bucket
-    do {
-        // search the bucket, see if the key is there
-        for (uint8_t i = 0; i < GROUP_SIZE; ++i){
-            if (buckets[bucket_i].indices[i] != DEX_TS &&
-                buckets[bucket_i].keys[i] == key){
-                
-                // set the index to the TS
-                buckets[bucket_i].indices[i] = DEX_TS;
+    // if this bucket has a list attached to it, then get to the end of it
+    while (buckets[bucket_i].keys[key_i] != key &&
+           buckets[bucket_i].indices[key_i] != DEX_TS &&
+           buckets[bucket_i].jump_dists[key_i] > 0){
 
-                // found the key for the val
-                hm_set_err(ptr, ds_success);
-                return;
-            }
+        uintptr_t new_dex = add_jump_dist(
+                ptr,
+                bucket_i,
+                key_i, 
+                buckets[bucket_i].jump_dists[key_i]);
+        one_i_to_two(new_dex, bucket_i, key_i);
+    }
+    printf("[debug] bucket=%lu\n", bucket_i);
+    if (buckets[bucket_i].keys[key_i] != key || buckets[bucket_i].indices[key_i] == DEX_TS){
+        hm_set_err(ptr, ds_not_found);
+        return;
+    }
+
+    // clear the meta bit for the taken index
+    uintptr_t val_bucket; uint8_t val_key_i;
+    one_i_to_two(buckets[bucket_i].indices[key_i], val_bucket, val_key_i);
+
+    bit_set_or_clear(&(buckets[val_bucket].val_meta), val_key_i, false);
+
+    // move any keys on the linked list up a slot
+    uintptr_t cur_bucket = bucket_i; uint8_t cur_i = key_i;
+
+    while (buckets[cur_bucket].jump_dists[cur_i] > 0){
+        // get the next dex and move it here
+        uintptr_t next_dex = add_jump_dist(ptr, cur_bucket, cur_i, buckets[cur_bucket].jump_dists[cur_i]);
+        uintptr_t next_bucket_i; uint8_t next_key_i;
+        one_i_to_two(next_dex, next_bucket_i, next_key_i);
+
+        // leave the jump dist the same
+        buckets[cur_bucket].keys[cur_i] = buckets[next_bucket_i].keys[next_key_i];
+        buckets[cur_bucket].indices[cur_i] = buckets[next_bucket_i].indices[next_key_i];
+
+        // at the end, set the ending jump_dist to 0
+        if (buckets[next_bucket_i].jump_dists[next_key_i] == 0){
+            buckets[cur_bucket].jump_dists[cur_i] = 0;
         }
 
-        // if you don't find it, check for a REMAP entry and see if there's another
-        // bucket to check
-        if (buckets[bucket_i].remap_i != UINTPTR_MAX){
-            bucket_i = buckets[bucket_i].remap_i;
-        } else {
-            hm_set_err(ptr, ds_not_found);
-            return;
-        }
-    } while (true);
+        cur_bucket = next_bucket_i; cur_i = next_key_i;
+    }
+    // the last bucket should be empty, so mark it as such
+    buckets[cur_bucket].indices[cur_i] = DEX_TS;
+    // clear the key (for debugging so I can tell when keys are set or not)
+    buckets[cur_bucket].keys[cur_i] = 0;
+
+    hm_set_err(ptr, ds_success);
 }

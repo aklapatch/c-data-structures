@@ -15,14 +15,14 @@
         }\
     } while(0)
 
-#define TESTERRSUCCESS(message, ptr)\
+#define TESTERRSUCCESS(message, ptr, is_hm)\
     do{\
-        TEST(message " err val check", dynarr_err(ptr) == ds_success);\
-        TEST(message " err set check", !dynarr_is_err_set(ptr));\
+        TEST(message " err val check", is_hm ? hm_err(ptr) == ds_success : dynarr_err(ptr) == ds_success);\
+        TEST(message " err set check", is_hm ? !hm_is_err_set(ptr) : !dynarr_is_err_set(ptr));\
     }while (0)
 
-#define TESTERRFAIL(message, ptr, err_val)\
+#define TESTERRFAIL(message, ptr, err_val, is_hm)\
     do{\
-        TEST(message " err val check", dynarr_err(ptr) == err_val);\
-        TEST(message " err set check", dynarr_is_err_set(ptr));\
+        TEST(message " err val check", is_hm ? hm_err(ptr) == err_val : dynarr_err(ptr) == err_val);\
+        TEST(message " err set check", is_hm ? hm_is_err_set(ptr) : dynarr_is_err_set(ptr));\
     }while (0)
