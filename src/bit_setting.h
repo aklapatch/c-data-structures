@@ -17,10 +17,10 @@ void bit_set_or_clear(void *data, uintptr_t bit_to_set, bool value){
     }
 }
 
-void bit_get(void *data, uintptr_t bit_to_get, bool *value){
+bool bit_get(void *data, uintptr_t bit_to_get){
     uint8_t *byte_ptr = (uint8_t*)data;
     uintptr_t byte_to_get = bit_to_get/8;
     bit_to_get -= (byte_to_get*8);
 
-    *value = byte_ptr[byte_to_get] & (1 << bit_to_get);
+    return (byte_ptr[byte_to_get] & (1 << bit_to_get))  > 0 ? true : false;
 }

@@ -247,8 +247,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
 
     // if this bucket has a list attached to it, then get to the end of it
     while (buckets[bucket_i].keys[key_i] != key &&
-           buckets[bucket_i].indices[key_i] != DEX_TS &&
-           buckets[bucket_i].jump_dists[key_i] > 0){
+           buckets[bucket_i].indices[key_i] != DEX_TS){
 
         uintptr_t jump_dist = hm_jump_dist(buckets[bucket_i].jump_dists[key_i]);
 
@@ -434,8 +433,7 @@ uintptr_t hm_raw_insert_key(
 
     // if this bucket has a list attached to it, then get to the end of it
     while (buckets[bucket_i].keys[key_i] != key &&
-           buckets[bucket_i].indices[key_i] != DEX_TS &&
-           buckets[bucket_i].jump_dists[key_i] > 0){
+           buckets[bucket_i].indices[key_i] != DEX_TS){
 
         // look for a value slot
         if (ret_index == DEX_TS){
@@ -444,18 +442,29 @@ uintptr_t hm_raw_insert_key(
                 ret_index = bucket_i*GROUP_SIZE + slot;
             }
         }
+
+        bool existing_direct_hit = bit_get(&(buckets[bucket_i].direct_hit), key_i);
+        if (direct_hit && !existing_direct_hit){
+            // re-insert all the necessary keys chained to this key.
+
+
+
+        }
+
+        if (buckets[bucket_i].jump_dists[key_i] == 0){ break; }
+
         uintptr_t jump_dist = hm_jump_dist(buckets[bucket_i].jump_dists[key_i]);
 
         uintptr_t new_dex = truncate_to_cap(
-            ptr,
-            bucket_i*GROUP_SIZE + key_i + jump_dist);
+                ptr,
+                bucket_i*GROUP_SIZE + key_i + jump_dist);
         one_i_to_two(new_dex, bucket_i, key_i);
         direct_hit = false;
     }
-    //
     // if the key matches, then pass out the index we already have
     if (buckets[bucket_i].keys[key_i] == key && 
         buckets[bucket_i].indices[key_i] != DEX_TS){
+
         printf("[debug] key replace %lu\n", key);
         two_i_to_one(*key_dex_out, bucket_i, key_i);
         replace = true;
