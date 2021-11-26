@@ -4,16 +4,27 @@
 #include <assert.h>
 
 #define ITEMS_IN_ARR(arr) (sizeof((arr))/sizeof((arr)[0]))
+#define TESTGROUP(label) printf("[Test Group]: %s\n", label);
 #define TEST(label, expression)\
     do{\
-        printf("[Test]: (%s): ", label);\
-        if (expression){\
-            printf(" OK\n");\
-        } else {\
-            printf(" FAIL! (%s) is false @ %s:%u\n", #expression, __FILE__, __LINE__);\
+        if (!(expression)){\
+            printf("[Test]: (%s) FAIL! (%s) is false @ %s:%u\n",label, #expression, __FILE__, __LINE__);\
             exit(1);\
         }\
     } while(0)
+
+#define TESTINTEQ(val1, val2)\
+    do{\
+        if (!test_int_eq(val1, val2, #val1, #val2)){ exit(1); } \
+    }while(0)
+
+bool test_int_eq(uintptr_t val1, uintptr_t val2, char *fail_str1, char *fail_str2){
+    if (val1 != val2){
+        printf("[test]: FAIL %s = %lx, %s = %lx\n", fail_str1, val1, fail_str2, val2);
+        return false;
+    }
+    return true;
+}
 
 #define TESTERRSUCCESS(message, ptr, is_hm)\
     do{\

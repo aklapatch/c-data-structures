@@ -274,7 +274,6 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
 
     hm_info *base_ptr = hm_info_ptr(ptr);
 
-    uintptr_t old_cap = hm_cap(ptr);
     uintptr_t new_cap = next_pow2(item_count);
 
     uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
@@ -551,7 +550,7 @@ void hm_del(void *ptr, uintptr_t key){
                 // clear val_slot
                 uintptr_t val_bucket; uint8_t val_i;
                 one_i_to_two(buckets[bucket_i].indices[i], val_bucket, val_i);
-                bit_set_or_clear(&(buckets[val_bucket].val_meta), i, false);
+                bit_set_or_clear(&(buckets[val_bucket].val_meta), val_i, false);
 
                 // set index to tombstone
                 buckets[bucket_i].indices[i] = DEX_TS;
