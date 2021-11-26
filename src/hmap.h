@@ -26,7 +26,7 @@ uintptr_t hm_jump_dist(uint8_t in){
 #define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 typedef struct {
     // tmp_val_i is used to set the value array in the macro
-    uintptr_t keys[GROUP_SIZE], indices[GROUP_SIZE], tmp_val_i; 
+    uintptr_t keys[GROUP_SIZE], indices[GROUP_SIZE]; 
     uint8_t val_meta; // bit set for value taken
     uint8_t key_type; // 0 for numeric key, 1 for c string key.
     uint8_t num; // how many keys are in the bucket
@@ -310,7 +310,7 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
             inf_ptr->buckets[i].indices[j] = DEX_TS;
         }
         // keep the which value slots are taken
-        if (i < old_cap){
+        if (i < old_num_buckets){
             inf_ptr->buckets[i].val_meta = old_bucket_ptr[i].val_meta;
         } else {
             inf_ptr->buckets[i].val_meta = 0;
