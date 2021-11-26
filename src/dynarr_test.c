@@ -22,29 +22,31 @@ void *bad_realloc(void*ptr, size_t size){
 int main(){
 
     uint8_t *ptr = NULL;
-    TEST("NULL dynarr_cap()", dynarr_cap(ptr) == 0);
-    TEST("NULL dynarr_num()", dynarr_num(ptr) == 0);
-    TESTERRFAIL("NULL error check", ptr, ds_null_ptr);
-
+    TESTGROUP("Init");
+    TESTINTEQ(dynarr_cap(ptr), 0);
+    TESTINTEQ(dynarr_num(ptr), 0);
+    TESTINTEQ(dynarr_err(ptr), ds_null_ptr);
+    
     // try saying the buffer is too small to check error handling
+    TESTGROUP("buf init tests");
     uint8_t other_buf[48];
     dynarr_init_from_buf(ptr, other_buf, sizeof(dynarr_inf) - 1, realloc);
-    TEST("init from buf failure", ptr == NULL);
+    TESTPTREQ(ptr, NULL);
     
     // test weird alignment
     uint8_t buf8[2*sizeof(dynarr_inf)];
     for (uint8_t* buf_ptr = buf8, i = 0; i < 8; ++i,++buf_ptr){
         dynarr_init_from_buf(ptr, buf_ptr, sizeof(buf8), realloc);
-        TEST("init from buf alignment", (uintptr_t)ptr % sizeof(uintptr_t) == 0);
+        TESTINTEQ((uintptr_t)ptr % sizeof(uintptr_t), 0);
     }
 
     dynarr_inf init_test_buf[2];
     dynarr_init_from_buf(ptr, init_test_buf, sizeof(init_test_buf), realloc);
-    TEST("init from buf ", ptr != NULL);
-    TEST("init from buf ", dynarr_num(ptr) == 0);
-    TEST("init from buf ", dynarr_cap(ptr) == sizeof(dynarr_inf));
-    TEST("init from buf ", dynarr_outside_mem(ptr) == true);
-    TESTERRSUCCESS("init from buf", ptr);
+    TESTPTRNEQ(ptr, NULL);
+    TESTINTEQ(dynarr_num(ptr), 0);
+    TESTINTEQ(dynarr_cap(ptr), sizeof(dynarr_inf));
+    TESTINTEQ(dynarr_outside_mem(ptr), true);
+    TESTINTEQ(dynarr_err(ptr), ds_success);
 
     // Append a couple items
     uint8_t items[] = { 3,4,5};

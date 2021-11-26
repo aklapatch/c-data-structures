@@ -13,13 +13,23 @@
         }\
     } while(0)
 
-
 #define TESTINTEQ(val1, val2)\
     do{\
-        if (!test_int_eq((val1), (val2), #val1, #val2)){ exit(1); } \
+        if (!test_int_eq((val1), (val2), #val1, #val2)){  \
+            printf("[Fail] %s @ %u\n", __FILE__, __LINE__);\
+            exit(1); } \
+    }while(0)
+
+#define TESTINTNEQ(val1, val2)\
+    do{\
+        if (test_int_eq((val1), (val2), #val1, #val2)){  \
+            printf("[Fail] %s @ %u\n", __FILE__, __LINE__);\
+            exit(1); } \
     }while(0)
 
 #define TESTPTREQ(ptr1, ptr2) TESTINTEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+
+#define TESTPTRNEQ(ptr1, ptr2) TESTINTNEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
 
 bool test_int_eq(uintptr_t val1, uintptr_t val2, char *fail_str1, char *fail_str2){
     if (val1 != val2){

@@ -33,4 +33,4 @@ test: tests
 	$(OUTDIR)/dynarr_test
 	echo "Starting hash_test"
 	echo "---------------------------------------------------------------------"
-	$(OUTDIR)hash_test
+	$(OUTDIR)/hash_test
