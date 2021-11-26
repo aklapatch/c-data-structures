@@ -236,7 +236,6 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
             // if the key matches, then pass out the index we already have
             if (buckets[bucket_i].indices[i] == DEX_TS){
                 // set the key
-                printf("[debug] key set %lu\n", key);
                 buckets[bucket_i].keys[i] = key;
                 buckets[bucket_i].indices[i] = dex;
                 break;
@@ -249,7 +248,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
         // quadratic probing
         uintptr_t main_i;
         two_i_to_one(main_i, bucket_i, key_i);
-        main_i += step;
+        main_i = truncate_to_cap(ptr, main_i + step);
         one_i_to_two(main_i, bucket_i, key_i);
     }
     if (probe_try == 0){
@@ -401,17 +400,15 @@ uintptr_t hm_raw_insert_key(
         // search the bucket and see if we can insert
         // TODO double check the logic with --times is correct
         uint8_t times = GROUP_SIZE, i = key_i;
-        for (; times > 0; ++i, i &= (GROUP_SIZE-1), --times){
+        for (; times > 0; i = (i + 1) & (GROUP_SIZE-1), --times){
             // if the key matches, then pass out the index we already have
             if (buckets[bucket_i].keys[i] == key && 
-                    buckets[bucket_i].indices[i] != DEX_TS){
-                printf("[debug] key replace %lu\n", key);
+                buckets[bucket_i].indices[i] != DEX_TS){
                 two_i_to_one(*key_dex_out, bucket_i, i);
                 replace = true;
                 break;
             } else if (buckets[bucket_i].indices[i] == DEX_TS){
                 // set the key
-                printf("[debug] key set %lu\n", key);
                 buckets[bucket_i].keys[i] = key;
                 two_i_to_one(*key_dex_out, bucket_i, i);
                 break;
@@ -424,7 +421,7 @@ uintptr_t hm_raw_insert_key(
         // quadratic probing
         uintptr_t main_i;
         two_i_to_one(main_i, bucket_i, key_i);
-        main_i += step;
+        main_i = truncate_to_cap(ptr, main_i + step);
         one_i_to_two(main_i, bucket_i, key_i);
     }
     if (probe_try == 0){
@@ -465,7 +462,6 @@ uintptr_t hm_raw_insert_key(
             uintptr_t _hm_slot_i = UINTPTR_MAX;\
             uintptr_t __ds_empty_slot = hm_raw_insert_key(ptr, k, &_hm_slot_i);\
             if (__ds_empty_slot != UINTPTR_MAX){\
-                printf("key=%lu, k_slot=%lu\n",k, _hm_slot_i);\
                 uintptr_t _hm_bucket_i; uint8_t _hm_key_i;\
                 one_i_to_two(_hm_slot_i, _hm_bucket_i, _hm_key_i);\
                 ptr[__ds_empty_slot] = v;\
@@ -515,7 +511,7 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
         // quadratic probing
         uintptr_t main_i;
         two_i_to_one(main_i, bucket_i, key_i);
-        main_i += step;
+        main_i = truncate_to_cap(ptr, main_i + step);
         one_i_to_two(main_i, bucket_i, key_i);
     }
     // no active key here
@@ -567,7 +563,7 @@ void hm_del(void *ptr, uintptr_t key){
         // quadratic probing
         uintptr_t main_i;
         two_i_to_one(main_i, bucket_i, key_i);
-        main_i += step;
+        main_i = truncate_to_cap(ptr, main_i + step);
         one_i_to_two(main_i, bucket_i, key_i);
     }
 
