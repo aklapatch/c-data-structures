@@ -34,8 +34,8 @@ int main(){
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        TESTERRSUCCESS("hm query", hmap, true);
-        TEST("hm query result", out_val == ins_vals[i]);
+        TESTINTEQ(hm_err(hmap), ds_success);
+        TESTINTEQ(out_val, ins_vals[i]);
     }
 
     TESTGROUP("Realloc key preservation");
@@ -65,20 +65,22 @@ int main(){
         TESTINTEQ(hm_err(hmap), ds_not_found);
     }
 
+    TESTGROUP("hmap free");
     hm_free(hmap);
-    TEST("hmap free", hmap == NULL);
+    TESTPTREQ(hmap, NULL);
 
+    TESTGROUP("Bulk insert");
     hm_init(hmap, 32, realloc, ahash_buf);
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         hm_set(hmap, i, i);
-        TESTERRSUCCESS("hm bulk insert", hmap, true);
+        TESTINTEQ(hm_err(hmap), ds_success);
     }
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, i, out_val);
-        TESTERRSUCCESS("hm bulk get after insert round 2", hmap, true);
-        TEST("hm get == set", i == out_val);
+        TESTINTEQ(hm_err(hmap), ds_success);
+        TESTINTEQ(out_val, i);
     }
 
     return 0;
