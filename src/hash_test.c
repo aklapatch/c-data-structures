@@ -1,6 +1,6 @@
 #include "ahash.h"
 #include <stdio.h>  
-#define ROUNDS (2*UINT16_MAX)
+#define ROUNDS (1*UINT16_MAX)
 
 int main(){
     // test distribution of the ahash function
