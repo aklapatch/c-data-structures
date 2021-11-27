@@ -13,31 +13,43 @@
         }\
     } while(0)
 
+// This macro passing to a function is for a specific reason.
+// We only want the expression (val1 or val2) to be evaluated once, but
+// we still want to get the value of the result of the function.
+// We also want the stringified version of the expression, which 
+// We can only get from a macro.
+// I guess I could use variables, and that may be better.
+// The values are in the funciton, so they should be printed there
+// To associate the value with the string, pass the string into the function
+#define TESTINTNEQ(val1, val2)\
+    do{\
+        if (test_int_eq((val1), (val2), #val1, #val2, __FILE__, __LINE__)){  exit(1); }\
+    }while(0)
+
+
 #define TESTINTEQ(val1, val2)\
     do{\
-        if (!test_int_eq((val1), (val2), #val1, #val2)){  \
-            printf("[Fail] %s @ %u\n", __FILE__, __LINE__);\
-            exit(1); } \
+        uintptr_t _val1 = (val1), _val2 = (val2);\
+        if (_val1 != _val2){\
+            printf("[Test]: %s @ %u FAIL! %s = %lx, %s = %lx \n", __FILE__, __LINE__, #val1, _val1, #val2, _val2);\
+            exit(1);\
+        }\
     }while(0)
+
+// C, reducing code duplication by casting pointers to integers
+// (sarcastic)
+#define TESTPTREQ(ptr1, ptr2) TESTINTEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
 
 #define TESTINTNEQ(val1, val2)\
     do{\
-        if (test_int_eq((val1), (val2), #val1, #val2)){  \
-            printf("[Fail] %s @ %u\n", __FILE__, __LINE__);\
-            exit(1); } \
+        uintptr_t _val1 = (val1), _val2 = (val2);\
+        if (_val1 == _val2){\
+            printf("[Test]: %s @ %u FAIL! %s = %lx, %s = %lx \n", __FILE__, __LINE__, #val1, _val1, #val2, _val2);\
+            exit(1);\
+        }\
     }while(0)
 
-#define TESTPTREQ(ptr1, ptr2) TESTINTEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
-
 #define TESTPTRNEQ(ptr1, ptr2) TESTINTNEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
-
-bool test_int_eq(uintptr_t val1, uintptr_t val2, char *fail_str1, char *fail_str2){
-    if (val1 != val2){
-        printf("[test]: FAIL %s = %lx, %s = %lx\n", fail_str1, val1, fail_str2, val2);
-        return false;
-    }
-    return true;
-}
 
 #define TESTERRSUCCESS(message, ptr, is_hm)\
     do{\

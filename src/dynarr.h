@@ -220,14 +220,13 @@ void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
 }
 
 // absorb the pointer normally emitted by reallocing
-void dynarr_free(void * ptr){
+void _dynarr_free(void * ptr){
     if (ptr != NULL){
         realloc_fn_t realloc_fn = dynarr_realloc_fn(ptr);
-        void* __absorb_realloc__ptr = realloc_fn(dynarr_info(ptr), 0);
-        (void)__absorb_realloc__ptr;
-        ptr = NULL;
+        (void)realloc_fn(dynarr_info(ptr), 0);
     }
 }
+#define dynarr_free(ptr) _dynarr_free((ptr)); (ptr)=NULL
 
 #define dynarr_set_cap(ptr, new_cap) (ptr) = bare_dynarr_realloc((ptr), (new_cap), sizeof(*(ptr)));
 

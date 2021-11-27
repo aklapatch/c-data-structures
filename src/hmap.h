@@ -15,6 +15,7 @@ uintptr_t hm_jump_dist(uint8_t in){
 //TODO:
 // - refactor error setting (have variable carry the error to set and then set it at the end.
 // - comonize slot searching code.
+// - make a hash_benchmark
 
 #define GROUP_SIZE (8)
 
