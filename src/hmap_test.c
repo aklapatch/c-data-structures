@@ -21,6 +21,7 @@ int main(){
         ins_vals[i] = i;
         keys[i] = i;
         // insert the value
+        printf("key=%lu\n", i);
         hm_set(hmap, keys[i],ins_vals[i]);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
@@ -78,6 +79,7 @@ int main(){
     }
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         uint16_t out_val = UINT16_MAX;
+        printf("key=%lu\n", i);
         hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);

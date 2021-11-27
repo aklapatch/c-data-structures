@@ -19,6 +19,8 @@ uintptr_t hm_jump_dist(uint8_t in){
 
 #define GROUP_SIZE (8)
 
+#define PROBE_STEP (GROUP_SIZE)
+
 #define PROBE_TRIES (10)
 
 #define one_i_to_two(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
@@ -226,9 +228,9 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
 
     // needs to be larger than the size of a bucket
     // chosen somewhat randomly
-    uint32_t step = GROUP_SIZE*2 - GROUP_SIZE/2;
+    uint32_t step = PROBE_STEP;
     uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += GROUP_SIZE){
+    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
 
         // search the bucket and see if we can insert
         // TODO double check the logic with --times is correct
@@ -385,12 +387,12 @@ uintptr_t hm_raw_insert_key(
 
     // needs to be larger than the size of a bucket
     // chosen randomly
-    uint32_t step = GROUP_SIZE;
+    uint32_t step = PROBE_STEP;
     uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += GROUP_SIZE){
+    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
 
         // look for a val slot too
-        if (ret_index != DEX_TS){
+        if (ret_index == DEX_TS){
             uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
             if (slot != UINT8_MAX){
                 ret_index = bucket_i*GROUP_SIZE + slot;
@@ -431,11 +433,12 @@ uintptr_t hm_raw_insert_key(
 
     // start looking through everything (linear search) for a val slot
     one_i_to_two(*key_dex_out, bucket_i, key_i);
-    step = 1;
-    for (; ret_index == DEX_TS; ++step){
+    step = PROBE_STEP;
+    for (; ret_index == DEX_TS; step += PROBE_STEP){
         uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
         if (slot != UINT8_MAX){
             ret_index = bucket_i*GROUP_SIZE + slot;
+            break;
         }
         uintptr_t main_i;
         two_i_to_one(main_i, bucket_i, key_i);
@@ -490,9 +493,9 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
 
     // needs to be larger than the size of a bucket
     // chosen somewhat randomly
-    uint32_t step = GROUP_SIZE*2 - GROUP_SIZE/2;
+    uint32_t step = PROBE_STEP;
     uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += GROUP_SIZE){
+    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
 
         // search the bucket and see if we can insert
         // TODO double check the logic with --times is correct
@@ -542,9 +545,9 @@ void hm_del(void *ptr, uintptr_t key){
 
     // needs to be larger than the size of a bucket
     // chosen somewhat randomly
-    uint32_t step = GROUP_SIZE*2 - GROUP_SIZE/2;
+    uint32_t step = PROBE_STEP;
     uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += GROUP_SIZE){
+    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
 
         // search the bucket and see if we can insert
         // TODO double check the logic with --times is correct
