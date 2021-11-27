@@ -8,7 +8,7 @@ int main(){
     uint16_t *hmap = NULL;
     hm_init(hmap, 32, realloc, ahash_buf);
 
-    TESTGROUP("Basic init");
+    TEST_GROUP("Basic init");
     TESTINTEQ(hm_num(hmap), 0);
     TESTINTEQ(hm_err(hmap), ds_success);
     TESTINTEQ(hm_cap(hmap), 32);
@@ -16,7 +16,7 @@ int main(){
     // insert a lot of values and see how this goes.
     uint16_t ins_vals[31];
     uint64_t keys[31];
-    TESTGROUP("Insert a few keys");
+    TEST_GROUP("Insert a few keys");
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         ins_vals[i] = i;
         keys[i] = i;
@@ -38,7 +38,7 @@ int main(){
         TESTINTEQ(out_val, ins_vals[i]);
     }
 
-    TESTGROUP("Realloc key preservation");
+    TEST_GROUP("Realloc key preservation");
     hm_realloc(hmap, 64);
     // try resizing the hmap and see if all the key are still there
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
@@ -49,7 +49,7 @@ int main(){
     }
 
     // try deleting all the keys and make sure they're gone
-    TESTGROUP("Ensure deletion");
+    TEST_GROUP("Ensure deletion");
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         // insert the value
         // removing key 3 causes a chain of moves that I'm still debuggin
@@ -65,11 +65,11 @@ int main(){
         TESTINTEQ(hm_err(hmap), ds_not_found);
     }
 
-    TESTGROUP("hmap free");
+    TEST_GROUP("hmap free");
     hm_free(hmap);
     TESTPTREQ(hmap, NULL);
 
-    TESTGROUP("Bulk insert");
+    TEST_GROUP("Bulk insert");
     hm_init(hmap, 32, realloc, ahash_buf);
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){

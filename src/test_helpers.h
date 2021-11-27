@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#define TESTGROUP(label) printf("[Test Group]: %s\n", label);
+#define TEST_GROUP(label) printf("[Test Group]: %s\n", label);
 
 // We only want the expression (val1 or val2) to be evaluated once, but
 // we still want to get the value of the result of the function.
