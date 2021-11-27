@@ -67,7 +67,7 @@ int main(){
 
     TEST_GROUP("hmap free");
     hm_free(hmap);
-    TESTPTREQ(hmap, NULL);
+    TEST_PTR_EQ(hmap, NULL);
 
     TEST_GROUP("Bulk insert");
     hm_init(hmap, 32, realloc, ahash_buf);

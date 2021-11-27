@@ -32,7 +32,7 @@ int main(){
     TEST_GROUP("buf init tests");
     uint8_t other_buf[48];
     dynarr_init_from_buf(ptr, other_buf, sizeof(dynarr_inf) - 1, realloc);
-    TESTPTREQ(ptr, NULL);
+    TEST_PTR_EQ(ptr, NULL);
     
     // test weird alignment
     uint8_t buf8[2*sizeof(dynarr_inf)];
@@ -43,7 +43,7 @@ int main(){
 
     dynarr_inf init_test_buf[2];
     dynarr_init_from_buf(ptr, init_test_buf, sizeof(init_test_buf), realloc);
-    TESTPTRNEQ(ptr, NULL);
+    TEST_PTR_NEQ(ptr, NULL);
     TEST_INT_EQ(dynarr_num(ptr), 0);
     TEST_INT_EQ(dynarr_cap(ptr), sizeof(dynarr_inf));
     TEST_INT_EQ(dynarr_outside_mem(ptr), true);
@@ -60,7 +60,7 @@ int main(){
     TEST_GROUP("set cap");
     uint8_t * old_ptr = ptr;
     dynarr_set_cap(ptr, sizeof(other_buf));
-    TESTPTRNEQ(ptr, old_ptr);
+    TEST_PTR_NEQ(ptr, old_ptr);
     TEST_INT_EQ(dynarr_num(ptr), sizeof(items));
     TEST_INT_EQ(dynarr_outside_mem(ptr), false);
     TEST_INT_EQ(dynarr_err(ptr), ds_success);
@@ -193,13 +193,13 @@ int main(){
 
     TEST_GROUP("Free");
     dynarr_free(ptr);
-    TESTPTREQ(ptr, NULL);
+    TEST_PTR_EQ(ptr, NULL);
 
     // alloc fail tests!
     // --------------------------------------------------------------------
     TEST_GROUP("Alloc fail");
     dynarr_init(ptr, 7, bad_realloc);
-    TESTPTREQ(ptr, NULL);
+    TEST_PTR_EQ(ptr, NULL);
 
     // overlay the pointer over a struct so that it is not null, but has
     // memory to hold errors

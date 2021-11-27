@@ -23,6 +23,6 @@
 
 // ahhhh C, reducing code duplication by casting pointers to integers
 // (sarcastic)
-#define TESTPTREQ(ptr1, ptr2) TEST_INT_EQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+#define TEST_PTR_EQ(ptr1, ptr2) TEST_INT_EQ((uintptr_t)ptr1, (uintptr_t)ptr2)
 
-#define TESTPTRNEQ(ptr1, ptr2) TEST_INT_NEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+#define TEST_PTR_NEQ(ptr1, ptr2) TEST_INT_NEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
