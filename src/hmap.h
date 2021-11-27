@@ -210,21 +210,33 @@ uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
     return num & (hm_cap(ptr) - 1);
 }
 
-// basically an insert, but we don't need to look for a dex slot
-static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
+// This function is used for
+// - finding a key slot
+// - finding a key to delete
+// - finding a value index
+// - probe for slots 
+// - finding an empty slot
+// - finding a slot with a key in it
+//
+// if dex_slot_out is NULL, then don't look for a dex slot
+// returns key slot
+static uintptr_t key_find_helper(
+    void *ptr,
+    uintptr_t key,
+    uintptr_t *dex_slot_out,
+    bool find_empty){
 
     if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-    // hash the key and start looking for slots in the bucket it hashes to
     uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-    // true if key was replaced
-    bool replace = false;
 
+    uintptr_t key_ret_i = UINTPTR_MAX;
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i; uint8_t key_i;
     one_i_to_two(truncated_hash, bucket_i, key_i);
 
     hash_bucket* buckets = hm_bucket_ptr(ptr);
+    if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
     // needs to be larger than the size of a bucket
     // chosen somewhat randomly
@@ -232,21 +244,32 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
     uint8_t probe_try = PROBE_TRIES;
     for (; probe_try > 0; --probe_try, step += PROBE_STEP){
 
+        if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
+            uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
+            if (slot != UINT8_MAX){
+                *dex_slot_out = bucket_i*GROUP_SIZE + slot;
+            }
+        }
+
         // search the bucket and see if we can insert
         // TODO double check the logic with --times is correct
         uint8_t times = GROUP_SIZE, i = key_i;
         for (; times > 0; ++i, i &= (GROUP_SIZE-1), --times){
             // if the key matches, then pass out the index we already have
-            if (buckets[bucket_i].indices[i] == DEX_TS){
-                // set the key
-                buckets[bucket_i].keys[i] = key;
-                buckets[bucket_i].indices[i] = dex;
-                break;
+            if (find_empty){
+                if (buckets[bucket_i].indices[i] == DEX_TS){
+                    two_i_to_one(key_ret_i, bucket_i, i);
+                    goto val_search;
+                }
+            } else {
+                // look for the key
+                if (buckets[bucket_i].keys[i] == key && 
+                    buckets[bucket_i].indices[i] != DEX_TS){
+                    if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[i]; }
+                    two_i_to_one(key_ret_i, bucket_i, i);
+                    goto val_search;
+                }
             }
-        }
-        // gauge success
-        if (buckets[bucket_i].keys[i] == key){
-            break;
         }
         // quadratic probing
         uintptr_t main_i;
@@ -254,15 +277,49 @@ static uintptr_t insert_key_and_dex(void *ptr, uint64_t key, uintptr_t dex){
         main_i = truncate_to_cap(ptr, main_i + step);
         one_i_to_two(main_i, bucket_i, key_i);
     }
-    if (probe_try == 0){
-        // give up
-        return UINTPTR_MAX;
+    if (probe_try == 0 || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
+
+val_search:
+    // start looking through everything for a val slot
+    // use the old values of bucket_i and key_i
+    if (dex_slot_out != NULL && find_empty){
+        step = PROBE_STEP;
+        for (; *dex_slot_out == UINTPTR_MAX; step += PROBE_STEP){
+            uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
+            if (slot != UINT8_MAX){
+                *dex_slot_out = bucket_i*GROUP_SIZE + slot;
+                break;
+            }
+            uintptr_t main_i;
+            two_i_to_one(main_i, bucket_i, key_i);
+            main_i = truncate_to_cap(ptr, main_i + step);
+            one_i_to_two(main_i, bucket_i, key_i);
+        }
     }
 
-    if (!replace){
+    return key_ret_i;
+}
+
+// basically an insert, but we don't need to look for a dex slot
+static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
+
+    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
+
+    uintptr_t key_dex = key_find_helper(
+            ptr,
+            key,
+            NULL,
+            true);
+    if (key_dex == UINTPTR_MAX){ return UINTPTR_MAX; }
+
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_two(key_dex, bucket_i, key_i);
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    buckets[bucket_i].indices[key_i] = dex;
+
+    if (buckets[bucket_i].keys[key_i] != key){
         hm_info_ptr(ptr)->num++;
     }
-    // set the key meta if we should
 
     return 0;
 }
@@ -366,102 +423,25 @@ uintptr_t hm_raw_insert_key(
         uintptr_t key,
         uintptr_t *key_dex_out)
 {
-    if (hm_num(ptr) == hm_cap(ptr)){
-        return UINTPTR_MAX;
-    }
+    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
     hm_info_ptr(ptr)->tmp_val_i = UINTPTR_MAX;
 
-    // hash the key and start looking for slots in the bucket it hashes to
-    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-    // true if key was replaced
-    bool replace = false;
+    uintptr_t val_dex = UINTPTR_MAX;
+    *key_dex_out = key_find_helper(
+            ptr,
+            key,
+            &val_dex,
+            true);
 
-    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+    if (*key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
+
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(truncated_hash, bucket_i, key_i);
-    uintptr_t ret_index = DEX_TS;
-    *key_dex_out = UINTPTR_MAX;
-
-    hash_bucket* buckets = hm_bucket_ptr(ptr);
-
-    // needs to be larger than the size of a bucket
-    // chosen randomly
-    uint32_t step = PROBE_STEP;
-    uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
-
-        // look for a val slot too
-        if (ret_index == DEX_TS){
-            uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
-            if (slot != UINT8_MAX){
-                ret_index = bucket_i*GROUP_SIZE + slot;
-            }
-        }
-
-        // search the bucket and see if we can insert
-        // TODO double check the logic with --times is correct
-        uint8_t times = GROUP_SIZE, i = key_i;
-        for (; times > 0; i = (i + 1) & (GROUP_SIZE-1), --times){
-            // if the key matches, then pass out the index we already have
-            if (buckets[bucket_i].keys[i] == key && 
-                buckets[bucket_i].indices[i] != DEX_TS){
-                two_i_to_one(*key_dex_out, bucket_i, i);
-                replace = true;
-                break;
-            } else if (buckets[bucket_i].indices[i] == DEX_TS){
-                // set the key
-                buckets[bucket_i].keys[i] = key;
-                two_i_to_one(*key_dex_out, bucket_i, i);
-                break;
-            }
-        }
-        // gauge success
-        if (buckets[bucket_i].keys[i] == key){
-            break;
-        }
-        // quadratic probing
-        uintptr_t main_i;
-        two_i_to_one(main_i, bucket_i, key_i);
-        main_i = truncate_to_cap(ptr, main_i + step);
-        one_i_to_two(main_i, bucket_i, key_i);
-    }
-    if (probe_try == 0){
-        // give up
-        return UINTPTR_MAX;
-    }
-
-    // start looking through everything (linear search) for a val slot
     one_i_to_two(*key_dex_out, bucket_i, key_i);
-    step = PROBE_STEP;
-    for (; ret_index == DEX_TS; step += PROBE_STEP){
-        uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
-        if (slot != UINT8_MAX){
-            ret_index = bucket_i*GROUP_SIZE + slot;
-            break;
-        }
-        uintptr_t main_i;
-        two_i_to_one(main_i, bucket_i, key_i);
-        main_i = truncate_to_cap(ptr, main_i + step);
-        one_i_to_two(main_i, bucket_i, key_i);
-    }
 
-    if (ret_index == DEX_TS){
-        return UINTPTR_MAX;
-    }
-    // only set the index of the data when we know we have a slot to store the data with
-    uintptr_t val_bucket_i; uint8_t val_key_i;
-    one_i_to_two(ret_index, val_bucket_i, val_key_i);
-    buckets[val_bucket_i].val_meta |= 1 << val_key_i; 
+    hm_bucket_ptr(ptr)[bucket_i].keys[key_i] = key;
 
-    hm_info_ptr(ptr)->tmp_val_i = ret_index;
-
-    if (!replace){
-        hm_info_ptr(ptr)->num++;
-    }
-    // set the key meta if we should
-
-    return ret_index;
+    return val_dex;
 }
 
 #define hm_set(ptr, k, v)\
@@ -484,47 +464,21 @@ uintptr_t hm_raw_insert_key(
     }while(0)
 
 static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
-    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(truncated_hash, bucket_i, key_i);
 
-    hash_bucket* buckets = hm_bucket_ptr(ptr);
+    uintptr_t key_dex = key_find_helper(
+            ptr,
+            key,
+            NULL,
+            false);
 
-    // needs to be larger than the size of a bucket
-    // chosen somewhat randomly
-    uint32_t step = PROBE_STEP;
-    uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
-
-        // search the bucket and see if we can insert
-        // TODO double check the logic with --times is correct
-        uint8_t times = GROUP_SIZE, i = key_i;
-        for (; times > 0; ++i, i &= (GROUP_SIZE-1), --times){
-            // if the key matches, then pass out the index we already have
-            if (buckets[bucket_i].keys[i] == key && 
-                buckets[bucket_i].indices[i] != DEX_TS){
-
-                //FOUND IT!!!
-                return buckets[bucket_i].indices[i];
-
-            }
-            // if we hit a tombstone first try, then we know the key's not here.
-            if (key_i == i && buckets[bucket_i].indices[i] == DEX_TS){
-                hm_set_err(ptr, ds_not_found);
-                return UINTPTR_MAX;
-            }
-        }
-
-        // quadratic probing
-        uintptr_t main_i;
-        two_i_to_one(main_i, bucket_i, key_i);
-        main_i = truncate_to_cap(ptr, main_i + step);
-        one_i_to_two(main_i, bucket_i, key_i);
+    if (key_dex == UINTPTR_MAX){ 
+        hm_set_err(ptr, ds_not_found);
+        return UINTPTR_MAX; 
     }
-    // no active key here
-    hm_set_err(ptr, ds_not_found);
-    return UINTPTR_MAX;
+
+    uintptr_t key_bucket; uint8_t key_i;
+    one_i_to_two(key_dex, key_bucket, key_i);
+    return hm_bucket_ptr(ptr)[key_bucket].indices[key_i];
 }
 
 #define hm_get(ptr, key, val_to_set)\
@@ -536,44 +490,27 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
     } while(0)
 
 void hm_del(void *ptr, uintptr_t key){
-    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(truncated_hash, bucket_i, key_i);
 
-    hash_bucket* buckets = hm_bucket_ptr(ptr);
+    uintptr_t val_dex, key_dex = key_find_helper(
+            ptr,
+            key,
+            &val_dex,
+            false);
 
-    // needs to be larger than the size of a bucket
-    // chosen somewhat randomly
-    uint32_t step = PROBE_STEP;
-    uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
-
-        // search the bucket and see if we can insert
-        // TODO double check the logic with --times is correct
-        uint8_t times = GROUP_SIZE, i = key_i;
-        for (; times > 0; i = (i + 1) & (GROUP_SIZE - 1), --times){
-            if (buckets[bucket_i].keys[i] == key && 
-                buckets[bucket_i].indices[i] != DEX_TS){
-
-                // clear val_slot
-                uintptr_t val_bucket; uint8_t val_i;
-                one_i_to_two(buckets[bucket_i].indices[i], val_bucket, val_i);
-                bit_set_or_clear(&(buckets[val_bucket].val_meta), val_i, false);
-
-                // set index to tombstone
-                buckets[bucket_i].indices[i] = DEX_TS;
-                hm_set_err(ptr, ds_success);
-                return;
-            }
-        }
-
-        // quadratic probing
-        uintptr_t main_i;
-        two_i_to_one(main_i, bucket_i, key_i);
-        main_i = truncate_to_cap(ptr, main_i + step);
-        one_i_to_two(main_i, bucket_i, key_i);
+    if (key_dex == UINTPTR_MAX){
+        hm_set_err(ptr, ds_not_found);
+        return;
     }
 
-    hm_set_err(ptr, ds_not_found);
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_two(key_dex, bucket_i, key_i);
+
+    hash_bucket * buckets = hm_bucket_ptr(ptr);
+
+    uintptr_t val_bucket; uint8_t val_i;
+    one_i_to_two(buckets[bucket_i].indices[key_i], val_bucket, val_i);
+    bit_set_or_clear(&(buckets[val_bucket].val_meta), val_i, false);
+
+    buckets[bucket_i].indices[key_i] = DEX_TS;
+    hm_set_err(ptr, ds_success);
 }
