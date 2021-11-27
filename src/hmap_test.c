@@ -9,9 +9,9 @@ int main(){
     hm_init(hmap, 32, realloc, ahash_buf);
 
     TEST_GROUP("Basic init");
-    TESTINTEQ(hm_num(hmap), 0);
-    TESTINTEQ(hm_err(hmap), ds_success);
-    TESTINTEQ(hm_cap(hmap), 32);
+    TEST_INT_EQ(hm_num(hmap), 0);
+    TEST_INT_EQ(hm_err(hmap), ds_success);
+    TEST_INT_EQ(hm_cap(hmap), 32);
 
     // insert a lot of values and see how this goes.
     uint16_t ins_vals[31];
@@ -22,20 +22,20 @@ int main(){
         keys[i] = i;
         // insert the value
         hm_set(hmap, keys[i],ins_vals[i]);
-        TESTINTEQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
 
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        TESTINTEQ(hm_err(hmap), ds_success);
-        TESTINTEQ(out_val, ins_vals[i]);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, ins_vals[i]);
     }
 
     // make sure all values didn't get overwritten
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        TESTINTEQ(hm_err(hmap), ds_success);
-        TESTINTEQ(out_val, ins_vals[i]);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, ins_vals[i]);
     }
 
     TEST_GROUP("Realloc key preservation");
@@ -44,8 +44,8 @@ int main(){
     for (uint32_t i = 0; i < sizeof(ins_vals)/sizeof(ins_vals[0]); ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        TESTINTEQ(hm_err(hmap), ds_success);
-        TESTINTEQ(out_val, ins_vals[i]);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, ins_vals[i]);
     }
 
     // try deleting all the keys and make sure they're gone
@@ -58,11 +58,11 @@ int main(){
         // it may be getting moved to a slot where it does not belong, which is weird
         // I need to implement direct hit tracking to fix this I think.
         hm_del(hmap, keys[i]);
-        TESTINTEQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
 
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, keys[i], out_val);
-        TESTINTEQ(hm_err(hmap), ds_not_found);
+        TEST_INT_EQ(hm_err(hmap), ds_not_found);
     }
 
     TEST_GROUP("hmap free");
@@ -74,13 +74,13 @@ int main(){
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         hm_set(hmap, i, i);
-        TESTINTEQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
     }
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, i, out_val);
-        TESTINTEQ(hm_err(hmap), ds_success);
-        TESTINTEQ(out_val, i);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, i);
     }
 
     return 0;

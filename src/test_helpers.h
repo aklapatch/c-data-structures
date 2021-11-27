@@ -18,11 +18,11 @@
         }\
     }while(0)
 
-#define TESTINTEQ(val1, val2) TEST_CMP(val1, val2, !=)
-#define TESTINTNEQ(val1, val2) TEST_CMP(val1, val2, ==)
+#define TEST_INT_EQ(val1, val2) TEST_CMP(val1, val2, !=)
+#define TEST_INT_NEQ(val1, val2) TEST_CMP(val1, val2, ==)
 
 // ahhhh C, reducing code duplication by casting pointers to integers
 // (sarcastic)
-#define TESTPTREQ(ptr1, ptr2) TESTINTEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+#define TESTPTREQ(ptr1, ptr2) TEST_INT_EQ((uintptr_t)ptr1, (uintptr_t)ptr2)
 
-#define TESTPTRNEQ(ptr1, ptr2) TESTINTNEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+#define TESTPTRNEQ(ptr1, ptr2) TEST_INT_NEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
