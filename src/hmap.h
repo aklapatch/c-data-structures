@@ -385,7 +385,7 @@ uintptr_t hm_raw_insert_key(
 
     // needs to be larger than the size of a bucket
     // chosen randomly
-    uint32_t step = GROUP_SIZE*2 - GROUP_SIZE/2;
+    uint32_t step = GROUP_SIZE;
     uint8_t probe_try = PROBE_TRIES;
     for (; probe_try > 0; --probe_try, step += GROUP_SIZE){
 

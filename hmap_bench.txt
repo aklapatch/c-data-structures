@@ -1,2 +1,2 @@
-196605 inserts took 4.33411 sec
-f167a54
+196605 inserts took 3.97127 sec
+287f59f
