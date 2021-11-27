@@ -1,7 +1,6 @@
 #pragma once
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 #define TEST_GROUP(label) printf("[Test Group]: %s\n", label);
 

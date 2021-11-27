@@ -44,27 +44,6 @@ char * ds_get_err_str(ds_error_e err){
 // - Use functions to typecheck as much as possible (pointers mostly)
 //   this means that every macro should point to at least one function.
 
-// TODO:
-// - make dynarr:
-//   - revise so that macros only handle code that mutates the host pointer.
-//   - add a feature to init over a static buffer and transition to heap-allocated memory.
-//   - set append apis to use insert apis X
-//      - api list:
-    //      - alloc x
-    //      - realloc x
-    //      - free X
-    //      - addn x
-    //      - append X
-    //      - pop X
-    //      - maybegrow X
-    //      - arrdel X
-    //      - arrdeln X
-    //      - insertn x
-    //      - insert x
-// - then make hashmap
-// - then make string hashmap
-//
-
 typedef void *(*realloc_fn_t)(void *,size_t);
 
 typedef struct dynarr_inf{
@@ -111,10 +90,6 @@ bool dynarr_is_err_set(void * ptr){
 
 char * dynarr_err_str(void* ptr){
     return ds_get_err_str(dynarr_err(ptr));
-}
-
-void dynarr_print(void *ptr){
-    printf("dynarr: ptr=%p, base=%p, len=%lu, cap=%lu\n", ptr,dynarr_info(ptr), dynarr_num(ptr),dynarr_cap(ptr));
 }
 
 void *_dynarr_init(size_t num_elems, size_t elem_size, realloc_fn_t realloc_fn){
