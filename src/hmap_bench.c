@@ -7,6 +7,7 @@
 #include <time.h>
 #include <stdio.h>
 
+#define TIMES (3*UINT16_MAX)
 // bench insertion, lookup, at least.
 // Benching deletion doesn't make too much sense.
 int main(){
@@ -16,7 +17,7 @@ int main(){
     hm_init(hmap, 16, realloc, ahash_buf);
 
     clock_t start = clock();
-    for (uint32_t i = 0; i < 3*UINT16_MAX; ++i){
+    for (uint32_t i = 0; i < TIMES; ++i){
         hm_set(hmap, i, i);
         if (hm_is_err_set(hmap)){
             printf("Insert failed!\n");
@@ -24,7 +25,7 @@ int main(){
         }
     }
     clock_t end = clock();
-    printf("insert time taken %g sec\n",(double)(end-start)/CLOCKS_PER_SEC);
+    printf("%u inserts took %g sec\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC);
     hm_free(hmap);
 
     return 0;

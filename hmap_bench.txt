@@ -1,2 +1,2 @@
-insert time taken 3.87074 sec
-db500fa
+196605 inserts took 4.33411 sec
+f167a54
