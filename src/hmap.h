@@ -430,12 +430,17 @@ uintptr_t hm_raw_insert_key(
     }
 
     // start looking through everything (linear search) for a val slot
-    for (uintptr_t i = 0, num_buckets = hm_cap(ptr)/GROUP_SIZE;
-         i < num_buckets && ret_index == DEX_TS; ++i){
-        uint8_t slot = hm_val_meta_to_open_i(buckets[i].val_meta);
+    one_i_to_two(*key_dex_out, bucket_i, key_i);
+    step = 1;
+    for (; ret_index == DEX_TS; ++step){
+        uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
         if (slot != UINT8_MAX){
-            ret_index = i*GROUP_SIZE + slot;
+            ret_index = bucket_i*GROUP_SIZE + slot;
         }
+        uintptr_t main_i;
+        two_i_to_one(main_i, bucket_i, key_i);
+        main_i = truncate_to_cap(ptr, main_i + step);
+        one_i_to_two(main_i, bucket_i, key_i);
     }
 
     if (ret_index == DEX_TS){

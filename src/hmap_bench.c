@@ -1,5 +1,3 @@
-#pragma once
-
 #include"hmap.h"
 #include "ahash.h"
 #include "test_helpers.h"
