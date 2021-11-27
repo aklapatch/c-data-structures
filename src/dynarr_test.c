@@ -25,7 +25,6 @@ int main(){
     uint8_t *ptr = NULL;
     TESTGROUP("Init");
     TESTINTEQ(dynarr_cap(ptr), 0);
-    TESTINTEQ(1, 0);
     TESTINTEQ(dynarr_num(ptr), 0);
     TESTINTEQ(dynarr_err(ptr), ds_null_ptr);
     
