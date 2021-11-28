@@ -1,4 +1,5 @@
 DBG_CFLAGS=-g3 -Wall -Wextra -pg
+OPT_CFLAGS=-Wall -Wextra -O2
 PROFILE_CFLAGS=-pg -Wall -Wextra -O2 -g3
 OUTDIR=./build/
 
@@ -6,7 +7,7 @@ hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(DBG_CFLAGS) src/hmap_test.c -o $(OUTDIR)/hmap_test
 
 hash_test: src/hash_test.c src/ahash.h
-	$(CC) $(DBG_CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
+	$(CC) $(OPT_CFLAGS) src/hash_test.c -o $(OUTDIR)/hash_test
 	$(OUTDIR)/hash_test
 
 dynarr: src/dynarr_test.c src/test_helpers.h src/dynarr.h 

@@ -316,6 +316,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
     one_i_to_two(key_dex, bucket_i, key_i);
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     buckets[bucket_i].indices[key_i] = dex;
+    buckets[bucket_i].keys[key_i] = key;
 
     if (buckets[bucket_i].keys[key_i] != key){
         hm_info_ptr(ptr)->num++;
