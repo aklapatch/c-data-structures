@@ -439,7 +439,14 @@ uintptr_t hm_raw_insert_key(
     uintptr_t bucket_i; uint8_t key_i;
     one_i_to_two(*key_dex_out, bucket_i, key_i);
 
-    hm_bucket_ptr(ptr)[bucket_i].keys[key_i] = key;
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    buckets[bucket_i].keys[key_i] = key;
+    buckets[bucket_i].indices[key_i] = val_dex;
+
+    // set the bit for the val that is taken
+    one_i_to_two(val_dex, bucket_i, key_i);
+    bit_set_or_clear(&(buckets[bucket_i].val_meta), key_i, true);
+
 
     return val_dex;
 }
@@ -450,10 +457,7 @@ uintptr_t hm_raw_insert_key(
             uintptr_t _hm_slot_i = UINTPTR_MAX;\
             uintptr_t __ds_empty_slot = hm_raw_insert_key(ptr, k, &_hm_slot_i);\
             if (__ds_empty_slot != UINTPTR_MAX){\
-                uintptr_t _hm_bucket_i; uint8_t _hm_key_i;\
-                one_i_to_two(_hm_slot_i, _hm_bucket_i, _hm_key_i);\
                 ptr[__ds_empty_slot] = v;\
-                hm_bucket_ptr(ptr)[_hm_bucket_i].indices[_hm_key_i] = __ds_empty_slot;\
                 hm_set_err(ptr, ds_success); \
                 break;\
             } else { \

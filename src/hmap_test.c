@@ -22,7 +22,7 @@ int main(){
         keys[i] = i;
         // insert the value
         printf("key=%lu\n", i);
-        hm_set(hmap, keys[i],ins_vals[i]);
+        hm_set(hmap, keys[i], ins_vals[i]);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
         uint16_t out_val = UINT16_MAX;
