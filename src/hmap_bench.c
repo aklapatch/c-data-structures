@@ -24,6 +24,22 @@ int main(){
     }
     clock_t end = clock();
     printf("%u inserts took %g sec\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC);
+
+
+    // search for all the keys we inserted.
+    start = clock();
+    for (uint32_t i = 0; i < TIMES; ++i){
+        uint32_t out_val = UINT32_MAX;
+        hm_get(hmap, i, out_val);
+        if (hm_is_err_set(hmap)){
+            printf("Insert failed!\n");
+            exit(1);
+        }
+    }
+
+    end = clock();
+    printf("%u qeuries took %g sec\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC);
+
     hm_free(hmap);
 
     return 0;

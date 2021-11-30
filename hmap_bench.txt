@@ -1,2 +1,3 @@
-196605 inserts took 0.066562 sec
-3936424
+196605 inserts took 0.065283 sec
+196605 inserts took 0.016296 sec
+b4d532a
