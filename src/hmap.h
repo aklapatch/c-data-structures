@@ -3,15 +3,8 @@
 #include "bit_setting.h"
 
 // tombstone (empty) marker
-#define DEX_TS ((uintptr_t)UINTPTR_MAX)
+#define DEX_TS ((uintptr_t)UINT32_MAX)
 
-// used to find remap entries
-#define HASH_MULT_COEFF (2654435769)
-
-uintptr_t hm_jump_dist(uint8_t in){
-    uintptr_t top_half = (in & 0xf0) >> 4;
-    return in << top_half | in;
-}
 //TODO:
 // - refactor error setting (have variable carry the error to set and then set it at the end.
 // - comonize slot searching code.
@@ -29,7 +22,8 @@ uintptr_t hm_jump_dist(uint8_t in){
 #define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 typedef struct {
     // tmp_val_i is used to set the value array in the macro
-    uintptr_t keys[GROUP_SIZE], indices[GROUP_SIZE]; 
+    uintptr_t keys[GROUP_SIZE];
+    uint32_t indices[GROUP_SIZE]; 
     uint8_t val_meta; // bit set for value taken
     uint8_t key_type; // 0 for numeric key, 1 for c string key.
     uint8_t num; // how many keys are in the bucket
@@ -285,7 +279,8 @@ val_search:
     if (dex_slot_out != NULL && find_empty){
         step = PROBE_STEP;
         for (; *dex_slot_out == UINTPTR_MAX; step += PROBE_STEP){
-            uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
+            uint8_t val_meta = buckets[bucket_i].val_meta;
+            uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
                 *dex_slot_out = bucket_i*GROUP_SIZE + slot;
                 break;
