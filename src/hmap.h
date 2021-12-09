@@ -18,9 +18,16 @@
 #define two_i_to_one(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
 
 #define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
+
+typedef union {
+    uintptr_t int_key;
+    char *string_key;
+} key_u;
+
+
 typedef struct {
     // tmp_val_i is used to set the value array in the macro
-    uintptr_t keys[GROUP_SIZE];
+    key_u keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
     uint8_t val_meta; // bit set for value taken
     uint8_t key_type; // 0 for numeric key, 1 for c string key.
@@ -96,48 +103,7 @@ void _hm_free(void * ptr){
 
 #define hm_free(ptr) _hm_free(ptr),ptr=NULL
 
-void *_hm_init(size_t num_items, size_t item_size, realloc_fn_t realloc_fn, hash_fn_t hash_func){
-
-    // round up to 2 buckets
-    num_items = (num_items < GROUP_SIZE*2) ? GROUP_SIZE*2 : num_items;
-
-    hm_info *ret_ptr = realloc_fn(NULL, num_items*item_size + sizeof(hm_info));
-    if (ret_ptr == NULL) {return NULL;}
-
-    // don't set cap until we have buckets allocated
-    ret_ptr->outside_mem = false;
-    ret_ptr->num = 0;
-    ret_ptr->realloc_fn = realloc_fn;
-    ret_ptr->hash_func = hash_func;
-
-    // round up to the number of buckets needed
-    uintptr_t num_buckets = (num_items + (GROUP_SIZE - 1))/GROUP_SIZE;
-    hash_bucket *buckets = realloc_fn(NULL, num_buckets*sizeof(hash_bucket));
-    if (buckets == NULL){
-        ret_ptr->err = ds_alloc_fail;
-        ret_ptr->cap = 0;
-        return NULL;
-    }
-
-    ret_ptr->cap = num_items;
-    ret_ptr->buckets = buckets;
-
-    // init all the buckets
-    for (uintptr_t i = 0; i < num_buckets; ++i){
-        // set the TS value for indices
-        for (uint8_t j = 0;  j < GROUP_SIZE; ++j){
-            buckets[i].indices[j] = DEX_TS;
-        }
-        buckets[i].val_meta = 0;
-        buckets[i].key_type = 0;
-        buckets[i].num = 0;
-    }
-
-    ++ret_ptr;
-    return ret_ptr;
-}
-
-#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = _hm_init(num_items, sizeof(*ptr), realloc_fn, hash_func)
+#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_bare_realloc(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
 
 // API:
 // - find (key) -> index
@@ -254,7 +220,7 @@ static uintptr_t key_find_helper(
                 }
             } else {
                 // look for the key
-                if (buckets[bucket_i].keys[i] == key && 
+                if (buckets[bucket_i].keys[i].int_key == key && 
                     buckets[bucket_i].indices[i] != DEX_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[i]; }
                     two_i_to_one(key_ret_i, bucket_i, i);
@@ -306,23 +272,21 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
     one_i_to_two(key_dex, bucket_i, key_i);
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     buckets[bucket_i].indices[key_i] = dex;
-    buckets[bucket_i].keys[key_i] = key;
+    buckets[bucket_i].keys[key_i].int_key = key;
 
-    if (buckets[bucket_i].keys[key_i] != key){
+    if (buckets[bucket_i].keys[key_i].int_key != key){
         hm_info_ptr(ptr)->num++;
     }
 
     return 0;
 }
 
-// Don't pass NULL into this function!. This function pulls the realloc_fn_t
-// from the passed in pointer, which will go badly if it's null.
-void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
-
-    if (ptr == NULL) { return NULL; }
+// handle both the init and growing case, but not shrinking yet.
+void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
     item_count = (item_count < 2*GROUP_SIZE) ? 2*GROUP_SIZE : item_count;
 
+    // should be null safe, base_ptr will be null if ptr is null
     hm_info *base_ptr = hm_info_ptr(ptr);
 
     uintptr_t new_cap = next_pow2(item_count);
@@ -332,8 +296,6 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
     uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
 
-    realloc_fn_t realloc_fn = hm_realloc_fn(ptr);
-
     hm_info * inf_ptr = realloc_fn(base_ptr, data_size);
     if (inf_ptr == NULL){
         hm_set_err(ptr, ds_alloc_fail);
@@ -341,6 +303,7 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
         return ptr;
     }
 
+    // old_bucket_ptr is not necessary if allocating from scratch
     hash_bucket *old_bucket_ptr = inf_ptr->buckets;
     hash_bucket *bucket_ptr = realloc_fn(NULL, bucket_size);
     if (bucket_ptr == NULL){
@@ -352,6 +315,13 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
     inf_ptr->buckets = bucket_ptr;
     inf_ptr->cap = new_cap;
     inf_ptr->outside_mem = false;
+
+    if (base_ptr == NULL){
+        //allocating new array
+        inf_ptr->num = 0;
+        inf_ptr->realloc_fn = realloc_fn;
+        inf_ptr->hash_func = hash_func;
+    }
 
     // set the new meta to empty
     for (uintptr_t i = 0; i < num_buckets; ++i){
@@ -369,6 +339,11 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
     }
     ++inf_ptr;
 
+    // we should be done if we are just allocating
+    if (base_ptr == NULL){
+        return inf_ptr;
+    }
+
     // TODO re-insert keys, but leave the indexes since they're okay
     uintptr_t num_items = hm_num(inf_ptr);
     // search the old key structure for keys
@@ -376,7 +351,7 @@ void* hm_bare_realloc(void * ptr, uintptr_t item_count, uintptr_t item_size){
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
             if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
                 // hash the key here and re-insert it into the new array.
-                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
+                uintptr_t key = old_bucket_ptr[bucket_i].keys[i].int_key;
                 uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
 
                 uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
@@ -404,7 +379,7 @@ done:
     return inf_ptr;
 }
 
-#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, new_cap, sizeof(*ptr))
+#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, hm_realloc_fn(ptr), hm_hash_func(ptr), new_cap, sizeof(*ptr))
 
 // returns the value index
 // sets the key slot found
@@ -430,7 +405,7 @@ uintptr_t hm_raw_insert_key(
     one_i_to_two(key_dex_out, bucket_i, key_i);
 
     hash_bucket *buckets = hm_bucket_ptr(ptr);
-    buckets[bucket_i].keys[key_i] = key;
+    buckets[bucket_i].keys[key_i].int_key = key;
     buckets[bucket_i].indices[key_i] = val_dex;
 
     // set the bit for the val that is taken
