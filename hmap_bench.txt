@@ -1,3 +1,4 @@
-196605 inserts took 0.066909 sec
-196605 qeuries took 0.017291 sec
-d6c7e08
+68be2b5
+model name	: Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz
+196605 insertions took 0.072184 sec 72184 clocks avg over 10 runs
+196605 qeuries took 0.017994 sec 17994 clocks avg over 10 runs
