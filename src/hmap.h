@@ -411,24 +411,23 @@ done:
 // dex out is the index where the key is in the the bucket array
 uintptr_t hm_raw_insert_key(
         void *ptr, 
-        uintptr_t key,
-        uintptr_t *key_dex_out)
+        uintptr_t key)
 {
     if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
     hm_info_ptr(ptr)->tmp_val_i = UINTPTR_MAX;
 
     uintptr_t val_dex = UINTPTR_MAX;
-    *key_dex_out = key_find_helper(
+    uintptr_t key_dex_out = key_find_helper(
             ptr,
             key,
             &val_dex,
             true);
 
-    if (*key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
+    if (key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
 
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(*key_dex_out, bucket_i, key_i);
+    one_i_to_two(key_dex_out, bucket_i, key_i);
 
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     buckets[bucket_i].keys[key_i] = key;
@@ -438,17 +437,17 @@ uintptr_t hm_raw_insert_key(
     one_i_to_two(val_dex, bucket_i, key_i);
     bit_set_or_clear(&(buckets[bucket_i].val_meta), key_i, true);
 
-
+    hm_info_ptr(ptr)->tmp_val_i = val_dex;
+    
     return val_dex;
 }
 
 #define hm_set(ptr, k, v)\
     do{\
         for (uint8_t __hm_grow_tries = 2; __hm_grow_tries > 0; --__hm_grow_tries){\
-            uintptr_t _hm_slot_i = UINTPTR_MAX;\
-            uintptr_t __ds_empty_slot = hm_raw_insert_key(ptr, k, &_hm_slot_i);\
-            if (__ds_empty_slot != UINTPTR_MAX){\
-                ptr[__ds_empty_slot] = v;\
+            hm_info_ptr(ptr)->tmp_val_i = hm_raw_insert_key(ptr, k);\
+            if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
+                ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
                 hm_set_err(ptr, ds_success); \
                 break;\
             } else { \
