@@ -12,9 +12,7 @@
 
 #define GROUP_SIZE (8)
 
-#define PROBE_STEP (GROUP_SIZE)
-
-#define PROBE_TRIES (10)
+#define PROBE_TRIES (11)
 
 #define one_i_to_two(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
 #define two_i_to_one(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
@@ -234,9 +232,8 @@ static uintptr_t key_find_helper(
 
     // needs to be larger than the size of a bucket
     // chosen somewhat randomly
-    uint32_t step = PROBE_STEP;
     uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try, step += PROBE_STEP){
+    for (; probe_try > 0; --probe_try){
 
         if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
             uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
@@ -277,8 +274,7 @@ val_search:
     // start looking through everything for a val slot
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
-        step = PROBE_STEP;
-        for (; *dex_slot_out == UINTPTR_MAX; step += PROBE_STEP){
+        for (; *dex_slot_out == UINTPTR_MAX;){
             uint8_t val_meta = buckets[bucket_i].val_meta;
             uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
