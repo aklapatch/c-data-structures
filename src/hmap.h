@@ -266,9 +266,9 @@ static uintptr_t key_find_helper(
             }
         }
         // quadratic probing
-        uintptr_t main_i;
-        two_i_to_one(main_i, bucket_i, key_i);
-        main_i = truncate_to_cap(ptr, main_i + step);
+        // probe by hashing the hash for another place to look
+        hash = hm_hash_func(ptr)(&hash, sizeof(hash));
+        uintptr_t main_i = truncate_to_cap(ptr, hash);
         one_i_to_two(main_i, bucket_i, key_i);
     }
     if (probe_try == 0 || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
@@ -285,9 +285,8 @@ val_search:
                 *dex_slot_out = bucket_i*GROUP_SIZE + slot;
                 break;
             }
-            uintptr_t main_i;
-            two_i_to_one(main_i, bucket_i, key_i);
-            main_i = truncate_to_cap(ptr, main_i + step);
+            hash = hm_hash_func(ptr)(&hash, sizeof(hash));
+            uintptr_t main_i = truncate_to_cap(ptr, hash);
             one_i_to_two(main_i, bucket_i, key_i);
         }
     }
