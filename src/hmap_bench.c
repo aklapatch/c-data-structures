@@ -23,7 +23,7 @@ int main(){
         }
     }
     clock_t end = clock();
-    printf("%u inserts took %g sec\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC);
+    printf("%u inserts took %g sec %lu clocks\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC, end-start);
 
 
     // search for all the keys we inserted.
@@ -38,7 +38,7 @@ int main(){
     }
 
     end = clock();
-    printf("%u qeuries took %g sec\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC);
+    printf("%u qeuries took %g sec %lu clocks\n",TIMES, (double)(end-start)/CLOCKS_PER_SEC, end - start);
 
     hm_free(hmap);
 
