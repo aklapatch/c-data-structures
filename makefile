@@ -30,6 +30,7 @@ hmap_bench: src/hmap.h src/hmap_test.c src/test_helpers.h
 	git rev-parse --short HEAD > hmap_bench.txt
 	cat /proc/cpuinfo | grep name | uniq >> hmap_bench.txt
 	$(OUTDIR)/hmap_bench >> hmap_bench.txt
+	cat hmap_bench.txt
 	gprof -l  $(OUTDIR)/hmap_bench gmon.out > hmap_analysis.txt
 
 

@@ -5,14 +5,9 @@
 // tombstone (empty) marker
 #define DEX_TS ((uintptr_t)UINT32_MAX)
 
-//TODO:
-// - refactor error setting (have variable carry the error to set and then set it at the end.
-// - comonize slot searching code.
-// - make a hash_benchmark
-
 #define GROUP_SIZE (8)
 
-#define PROBE_TRIES (11)
+#define PROBE_TRIES (4)
 
 #define one_i_to_two(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
 #define two_i_to_one(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
