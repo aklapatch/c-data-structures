@@ -25,8 +25,6 @@ typedef struct {
     key_u keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
     uint8_t val_meta; // bit set for value taken
-    uint8_t key_type; // 0 for numeric key, 1 for c string key.
-    uint8_t num; // how many keys are in the bucket
 } hash_bucket;
 
 // hash function prototype
@@ -329,8 +327,6 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         } else {
             inf_ptr->buckets[i].val_meta = 0;
         }
-        inf_ptr->buckets[i].key_type = 0;
-        inf_ptr->buckets[i].num = 0;
     }
     ++inf_ptr;
 
