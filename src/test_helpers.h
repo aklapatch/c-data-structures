@@ -12,7 +12,7 @@
     do{\
         uintptr_t _val1 = (val1), _val2 = (val2);\
         if (_val1 cmp_expr  _val2){\
-            printf("[Test]: %s @ %u FAIL! %s (%lx) %s %s (%lx)\n", __FILE__, __LINE__, #val1, _val1, #cmp_expr, #val2, _val2);\
+            printf("[Test]: %s @ %u FAIL! %s (%lX, %lu, %ld) %s %s (%lX, %lu, %ld)\n", __FILE__, __LINE__, #val1, _val1, _val1, _val1, #cmp_expr, #val2, _val2, _val2, _val2);\
             exit(1);\
         }\
     }while(0)
