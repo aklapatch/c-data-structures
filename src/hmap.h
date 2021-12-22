@@ -9,22 +9,20 @@
 
 #define PROBE_TRIES (4)
 
-#define one_i_to_two(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
-#define two_i_to_one(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
+#define one_i_to_val_is(main_i, bucket_i, key_i) bucket_i = (main_i)/8; key_i = main_i - (bucket_i*8)
+#define val_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*8 + key_i
+
+#define one_i_to_bucket_is(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
+#define bucket_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
 
 #define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 
-typedef union {
-    uintptr_t int_key;
-    char *string_key;
-} key_u;
-
+// define the dict as it's own thing, separate from the hmap, it has different needs.
 
 typedef struct {
     // tmp_val_i is used to set the value array in the macro
-    key_u keys[GROUP_SIZE];
+    uintptr_t keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
-    uint8_t val_meta; // bit set for value taken
 } hash_bucket;
 
 // hash function prototype
@@ -35,12 +33,17 @@ typedef struct hm_info{
     realloc_fn_t realloc_fn;
     // holds the metadata for the hash table.
     hash_bucket* buckets;
+    uint8_t *val_metas;
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
 } hm_info;
 
 hm_info * hm_info_ptr(void * ptr){
     return (ptr == NULL) ? NULL : (hm_info*)ptr - 1;
+}
+
+uint8_t *hm_val_meta_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
 }
 
 hash_fn_t hm_hash_func(void *ptr){
@@ -184,7 +187,10 @@ static uintptr_t key_find_helper(
     uintptr_t key_ret_i = UINTPTR_MAX;
     uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(truncated_hash, bucket_i, key_i);
+    one_i_to_bucket_is(truncated_hash, bucket_i, key_i);
+
+    uintptr_t val_i; uint8_t val_bit_i;
+    one_i_to_val_is(truncated_hash, val_i, val_bit_i);
 
     hash_bucket* buckets = hm_bucket_ptr(ptr);
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
@@ -195,28 +201,27 @@ static uintptr_t key_find_helper(
     for (; probe_try > 0; --probe_try){
 
         if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
-            uint8_t slot = hm_val_meta_to_open_i(buckets[bucket_i].val_meta);
+            uint8_t slot = hm_val_meta_to_open_i(hm_val_meta_ptr(ptr)[val_i]);
             if (slot != UINT8_MAX){
-                *dex_slot_out = bucket_i*GROUP_SIZE + slot;
+                *dex_slot_out = val_i*GROUP_SIZE + slot;
             }
         }
 
         // search the bucket and see if we can insert
-        // TODO double check the logic with --times is correct
-        uint8_t times = GROUP_SIZE, i = key_i;
-        for (; times > 0; ++i, i &= (GROUP_SIZE-1), --times){
+        uint8_t i = 0;
+        for (; i < GROUP_SIZE; ++i){
             // if the key matches, then pass out the index we already have
             if (find_empty){
                 if (buckets[bucket_i].indices[i] == DEX_TS){
-                    two_i_to_one(key_ret_i, bucket_i, i);
+                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
                     goto val_search;
                 }
             } else {
                 // look for the key
-                if (buckets[bucket_i].keys[i].int_key == key && 
+                if (buckets[bucket_i].keys[i] == key && 
                     buckets[bucket_i].indices[i] != DEX_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[i]; }
-                    two_i_to_one(key_ret_i, bucket_i, i);
+                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
                     goto val_search;
                 }
             }
@@ -225,7 +230,8 @@ static uintptr_t key_find_helper(
         // probe by hashing the hash for another place to look
         hash = hm_hash_func(ptr)(&hash, sizeof(hash));
         uintptr_t main_i = truncate_to_cap(ptr, hash);
-        one_i_to_two(main_i, bucket_i, key_i);
+        one_i_to_bucket_is(main_i, bucket_i, key_i);
+        one_i_to_val_is(main_i, val_i, val_bit_i);
     }
     if (probe_try == 0 || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
 
@@ -234,15 +240,15 @@ val_search:
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
         for (; *dex_slot_out == UINTPTR_MAX;){
-            uint8_t val_meta = buckets[bucket_i].val_meta;
+            uint8_t val_meta = hm_val_meta_ptr(ptr)[val_i];
             uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
-                *dex_slot_out = bucket_i*GROUP_SIZE + slot;
+                *dex_slot_out = val_i*GROUP_SIZE + slot;
                 break;
             }
             hash = hm_hash_func(ptr)(&hash, sizeof(hash));
             uintptr_t main_i = truncate_to_cap(ptr, hash);
-            one_i_to_two(main_i, bucket_i, key_i);
+            one_i_to_val_is(main_i, val_i, val_bit_i);
         }
     }
 
@@ -262,14 +268,10 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
     if (key_dex == UINTPTR_MAX){ return UINTPTR_MAX; }
 
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(key_dex, bucket_i, key_i);
+    one_i_to_bucket_is(key_dex, bucket_i, key_i);
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     buckets[bucket_i].indices[key_i] = dex;
-    buckets[bucket_i].keys[key_i].int_key = key;
-
-    if (buckets[bucket_i].keys[key_i].int_key != key){
-        hm_info_ptr(ptr)->num++;
-    }
+    buckets[bucket_i].keys[key_i] = key;
 
     return 0;
 }
@@ -285,6 +287,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     uintptr_t new_cap = next_pow2(item_count);
 
     uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
+    uintptr_t old_num_val_metas = hm_cap(ptr)/8;
     uintptr_t num_buckets = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
     uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
@@ -296,12 +299,24 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         return ptr;
     }
 
+    uintptr_t num_val_metas = (new_cap + 7)/8;
+    uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : base_ptr->val_metas;
+    uint8_t *new_val_metas = realloc_fn(old_val_metas, num_val_metas);
+    if (new_val_metas == NULL){
+        ++inf_ptr;
+        hm_set_err(inf_ptr, ds_alloc_fail);
+        return inf_ptr;
+    }
+
+    inf_ptr->val_metas = new_val_metas;
+
     // old_bucket_ptr is not necessary if allocating from scratch
     hash_bucket *old_bucket_ptr = inf_ptr->buckets;
     hash_bucket *bucket_ptr = realloc_fn(NULL, bucket_size);
     if (bucket_ptr == NULL){
-        hm_set_err(ptr, ds_alloc_fail);
-        return ptr;
+        ++inf_ptr;
+        hm_set_err(inf_ptr, ds_alloc_fail);
+        return inf_ptr;
     }
 
     // associate the key pointer with the new structure
@@ -321,12 +336,9 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         for (uint16_t j = 0; j < GROUP_SIZE; ++j){
             inf_ptr->buckets[i].indices[j] = DEX_TS;
         }
-        // keep the which value slots are taken
-        if (i < old_num_buckets){
-            inf_ptr->buckets[i].val_meta = old_bucket_ptr[i].val_meta;
-        } else {
-            inf_ptr->buckets[i].val_meta = 0;
-        }
+    }
+    for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
+        inf_ptr->val_metas[i] = 0;
     }
     ++inf_ptr;
 
@@ -342,7 +354,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
             if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
                 // hash the key here and re-insert it into the new array.
-                uintptr_t key = old_bucket_ptr[bucket_i].keys[i].int_key;
+                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
                 uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
 
                 uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
@@ -381,8 +393,6 @@ uintptr_t hm_raw_insert_key(
 {
     if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-    hm_info_ptr(ptr)->tmp_val_i = UINTPTR_MAX;
-
     uintptr_t val_dex = UINTPTR_MAX;
     uintptr_t key_dex_out = key_find_helper(
             ptr,
@@ -393,15 +403,19 @@ uintptr_t hm_raw_insert_key(
     if (key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
 
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(key_dex_out, bucket_i, key_i);
+    one_i_to_bucket_is(key_dex_out, bucket_i, key_i);
 
     hash_bucket *buckets = hm_bucket_ptr(ptr);
-    buckets[bucket_i].keys[key_i].int_key = key;
+    // only increment the num if we are not replacing a key
+    if (buckets[bucket_i].indices[key_i] == DEX_TS){
+        hm_info_ptr(ptr)->num++;
+    }
+    buckets[bucket_i].keys[key_i] = key;
     buckets[bucket_i].indices[key_i] = val_dex;
 
     // set the bit for the val that is taken
-    one_i_to_two(val_dex, bucket_i, key_i);
-    bit_set_or_clear(&(buckets[bucket_i].val_meta), key_i, true);
+    one_i_to_val_is(val_dex, bucket_i, key_i);
+    bit_set_or_clear(&(hm_val_meta_ptr(ptr)[bucket_i]), key_i, true);
 
     hm_info_ptr(ptr)->tmp_val_i = val_dex;
     
@@ -437,7 +451,7 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
     }
 
     uintptr_t key_bucket; uint8_t key_i;
-    one_i_to_two(key_dex, key_bucket, key_i);
+    one_i_to_bucket_is(key_dex, key_bucket, key_i);
     return hm_bucket_ptr(ptr)[key_bucket].indices[key_i];
 }
 
@@ -463,13 +477,13 @@ void hm_del(void *ptr, uintptr_t key){
     }
 
     uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_two(key_dex, bucket_i, key_i);
+    one_i_to_bucket_is(key_dex, bucket_i, key_i);
 
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
     uintptr_t val_bucket; uint8_t val_i;
-    one_i_to_two(buckets[bucket_i].indices[key_i], val_bucket, val_i);
-    bit_set_or_clear(&(buckets[val_bucket].val_meta), val_i, false);
+    one_i_to_val_is(buckets[bucket_i].indices[key_i], val_bucket, val_i);
+    bit_set_or_clear(&(hm_val_meta_ptr(ptr)[val_bucket]), val_i, false);
 
     buckets[bucket_i].indices[key_i] = DEX_TS;
     hm_set_err(ptr, ds_success);

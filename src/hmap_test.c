@@ -3,7 +3,7 @@
 #include "test_helpers.h"
 #include <stdlib.h>
 
-#define NUM_KEYS (32)
+#define NUM_KEYS (31)
 int main(){
     
     uint16_t *hmap = NULL;
@@ -70,12 +70,18 @@ int main(){
     hm_init(hmap, 32, realloc, ahash_buf);
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
+        printf("key=%u\n", i);
         hm_set(hmap, i, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
+
+        uint16_t out_val = UINT16_MAX;
+        hm_get(hmap, i, out_val);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, i);
     }
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         uint16_t out_val = UINT16_MAX;
-        printf("key=%lu\n", i);
+        printf("key=%u\n", i);
         hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
