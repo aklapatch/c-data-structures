@@ -20,7 +20,6 @@
 // define the dict as it's own thing, separate from the hmap, it has different needs.
 
 typedef struct {
-    // tmp_val_i is used to set the value array in the macro
     uintptr_t keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
 } hash_bucket;
@@ -34,6 +33,7 @@ typedef struct hm_info{
     // holds the metadata for the hash table.
     hash_bucket* buckets;
     uint8_t *val_metas;
+    // tmp_val_i is used to set the value array in the macro
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
 } hm_info;
@@ -100,12 +100,6 @@ void _hm_free(void * ptr){
 #define hm_free(ptr) _hm_free(ptr),ptr=NULL
 
 #define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_bare_realloc(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
-
-// API:
-// - find (key) -> index
-// - set (key, val) -> err
-// - get (key) -> val
-// - set_cap
 
 bool hm_slot_empty(uintptr_t index){
     return index == DEX_TS;
@@ -180,7 +174,8 @@ static uintptr_t key_find_helper(
     uintptr_t *dex_slot_out,
     bool find_empty){
 
-    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
+    // only error out regarding size constraints when looking for an empty slot
+    if (!find_empty && hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
     uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
 
@@ -226,7 +221,6 @@ static uintptr_t key_find_helper(
                 }
             }
         }
-        // quadratic probing
         // probe by hashing the hash for another place to look
         hash = hm_hash_func(ptr)(&hash, sizeof(hash));
         uintptr_t main_i = truncate_to_cap(ptr, hash);
@@ -300,7 +294,8 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     }
 
     uintptr_t num_val_metas = (new_cap + 7)/8;
-    uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : base_ptr->val_metas;
+    // Don't use base_ptr->val_metas, That can get zeroed out after it's reallocated
+    uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : inf_ptr->val_metas;
     uint8_t *new_val_metas = realloc_fn(old_val_metas, num_val_metas);
     if (new_val_metas == NULL){
         ++inf_ptr;
@@ -309,6 +304,11 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     }
 
     inf_ptr->val_metas = new_val_metas;
+
+    // zero out new val_meta portion to 
+    for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
+        inf_ptr->val_metas[i] = 0;
+    }
 
     // old_bucket_ptr is not necessary if allocating from scratch
     hash_bucket *old_bucket_ptr = inf_ptr->buckets;
@@ -336,9 +336,6 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         for (uint16_t j = 0; j < GROUP_SIZE; ++j){
             inf_ptr->buckets[i].indices[j] = DEX_TS;
         }
-    }
-    for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
-        inf_ptr->val_metas[i] = 0;
     }
     ++inf_ptr;
 
@@ -413,12 +410,10 @@ uintptr_t hm_raw_insert_key(
     buckets[bucket_i].keys[key_i] = key;
     buckets[bucket_i].indices[key_i] = val_dex;
 
-    // set the bit for the val that is taken
-    one_i_to_val_is(val_dex, bucket_i, key_i);
-    bit_set_or_clear(&(hm_val_meta_ptr(ptr)[bucket_i]), key_i, true);
+    bit_set_or_clear(hm_val_meta_ptr(ptr), val_dex, true);
 
     hm_info_ptr(ptr)->tmp_val_i = val_dex;
-    
+
     return val_dex;
 }
 
@@ -481,9 +476,7 @@ void hm_del(void *ptr, uintptr_t key){
 
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
-    uintptr_t val_bucket; uint8_t val_i;
-    one_i_to_val_is(buckets[bucket_i].indices[key_i], val_bucket, val_i);
-    bit_set_or_clear(&(hm_val_meta_ptr(ptr)[val_bucket]), val_i, false);
+    bit_set_or_clear(hm_val_meta_ptr(ptr), buckets[bucket_i].indices[key_i], false);
 
     buckets[bucket_i].indices[key_i] = DEX_TS;
     hm_set_err(ptr, ds_success);

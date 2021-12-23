@@ -23,7 +23,7 @@ clean:
 	rm -rf $(OUTDIR)
 
 hmap_test: hmap
-	$(OUTDIR)/hmap_test
+	$(OUTDIR)/hmap_test | tee hmap_test.log
 
 hmap_bench: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench

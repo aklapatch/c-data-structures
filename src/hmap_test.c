@@ -48,12 +48,6 @@ int main(){
     // try deleting all the keys and make sure they're gone
     TEST_GROUP("Ensure deletion");
     for (uint32_t i = 0; i < NUM_KEYS; ++i){
-        // insert the value
-        // removing key 3 causes a chain of moves that I'm still debuggin
-        // removing 3 seems to work fine
-        // 11 is on a list with 3 and 9, but should be at bucket 3 slot 2
-        // it may be getting moved to a slot where it does not belong, which is weird
-        // I need to implement direct hit tracking to fix this I think.
         hm_del(hmap, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
