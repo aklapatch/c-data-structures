@@ -1,143 +1,145 @@
 #pragma once
 #include "dynarr.h"
+#include "bit_setting.h"
 
-#ifndef C_DS_HASH_FUNC
-// This code is derived from the ahash hash function.
-// It's written in rust, so I'm not sure I need to include 
-// the license or not since I'm porting it to C
-// https://github.com/tkaitchuck/aHash/blob/master/src/fallback_hash.rs
-#ifndef C_DS_HASH_SEED1 // pi in hex
-#define C_DS_HASH_SEED1 (0x3141592653589793)
-#endif
+// tombstone (empty) marker
+#define DEX_TS ((uintptr_t)UINT32_MAX)
 
-#ifndef C_DS_HASH_SEED2 // e in hex
-#define C_DS_HASH_SEED2 (0x2718281828459045)
-#endif
+#define GROUP_SIZE (8)
 
-#ifndef C_DS_AHASH_MULTIPLE
-#define C_DS_AHASH_MULTIPLE (6364136223846793005)
-#endif
+#define PROBE_TRIES (4)
 
-#define C_DS_HASH_FUNC ahash_buf
+#define one_i_to_val_is(main_i, bucket_i, key_i) bucket_i = (main_i)/8; key_i = main_i - (bucket_i*8)
+#define val_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*8 + key_i
 
-uint64_t ahash_wrapping_mul(uint64_t a, uint64_t b){
-    return (a*b) % UINT64_MAX;
-}
-uint64_t ahash_wrapping_add(uint64_t a, uint64_t b){
-    return (a+b) % UINT64_MAX;
-}
+#define one_i_to_bucket_is(main_i, bucket_i, key_i) bucket_i = (main_i)/GROUP_SIZE; key_i = main_i - (bucket_i*GROUP_SIZE)
+#define bucket_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*GROUP_SIZE + key_i
 
-uint64_t ahash_rotr(uint64_t n, int32_t c){
-    uint32_t mask = (8*sizeof(n) - 1);
-    c &= mask;
-    return (n << c) | (n>> ( (-c)&mask));
-}
+#define RND_TO_GRP_NUM(x) ((x + (GROUP_SIZE-1))/GROUP_SIZE)
 
-uint64_t ahash_rotl(uint64_t n, int32_t c){
-    uint32_t mask = (8*sizeof(n) - 1);
-    c &= mask;
-    return (n >> c) | (n << ( (-c)&mask));
-}
+// define the dict as it's own thing, separate from the hmap, it has different needs.
 
-void ahash_update(uint64_t * buf, uint64_t * pad, uint64_t data_in){
-    uint64_t tmp = ahash_wrapping_mul( (data_in ^ *buf), C_DS_AHASH_MULTIPLE );
-    *pad = ahash_wrapping_mul(ahash_rotl((*pad ^ tmp), 8) , C_DS_AHASH_MULTIPLE);
-    *buf = ahash_rotl((*buf ^ *pad), 24);
-}
-
-void ahash_update_128(uint64_t * buf, uint64_t * pad, uint64_t data_in[2]){
-    ahash_update(buf, pad, data_in[0]);
-    ahash_update(buf, pad, data_in[1]);
-}
-
-uint64_t ahash_buf(uint8_t *data, size_t data_len){
-    uint64_t buffer = C_DS_HASH_SEED1, pad = C_DS_HASH_SEED2;
-
-    buffer = ahash_wrapping_mul(C_DS_AHASH_MULTIPLE, ahash_wrapping_add((uint64_t)data_len, buffer));
-
-    if (data_len > 8){
-        if (data_len > 16){
-            // update on the last 128 bits
-            uint64_t last_128[2];
-            memcpy(&last_128, &data[data_len - 17], sizeof(last_128));
-            ahash_update_128(&buffer, &pad, last_128);
-            while (data_len > 16){
-                memcpy(last_128, data, sizeof(last_128[0]));
-                ahash_update(&buffer, &pad, last_128[0]);
-                data += sizeof(uint64_t);
-                data_len -= sizeof(uint64_t);
-            }
-        } else {
-            uint64_t first, last;
-            memcpy(&first, data, sizeof(first));
-            memcpy(&last, data + data_len - 9, sizeof(last));
-            ahash_update(&buffer, &pad, first);
-            ahash_update(&buffer, &pad, last);
-        }
-    }else{
-        uint64_t vals[2] = {0};
-        if (data_len >= 2){
-            if (data_len >= 4){
-                memcpy(vals, data, 4);
-                memcpy(&vals[1], data + data_len - 5, 4);
-            } else {
-                memcpy(vals, data, 2);
-                memcpy(&vals[1], data + data_len - 3, 2);
-            }
-        } else {
-            if (data_len > 0){
-                vals[1] = vals[0] = data[0];
-            } 
-        }
-        ahash_update_128(&buffer, &pad, vals);
-    }
-
-    uint32_t rot = buffer & 63;
-    return ahash_rotl(ahash_wrapping_mul(C_DS_AHASH_MULTIPLE, buffer) ^ pad, rot);
-}
-#endif
-
-#define GROUP_SIZE (16)
 typedef struct {
-    uint8_t meta[GROUP_SIZE];
-    uint64_t keys[GROUP_SIZE];
-} key_meta_group;
+    uintptr_t keys[GROUP_SIZE];
+    uint32_t indices[GROUP_SIZE]; 
+} hash_bucket;
 
-// API:
-// - find (key) -> index
-// - set (key, val) -> err
-// - get (key) -> val
-// - set_cap
+// hash function prototype
+typedef uintptr_t (*hash_fn_t)(void *, size_t);
 
-// For the memory layout of the hash table:
-// [info struct][data (ptr points here[0])][keys]
-// keys are uint64_t for keys
-c_ds_info * hm_info_ptr(void * ptr){
-    return dynarr_get_info(ptr);
+typedef struct hm_info{
+    hash_fn_t hash_func;
+    realloc_fn_t realloc_fn;
+    // holds the metadata for the hash table.
+    hash_bucket* buckets;
+    uint8_t *val_metas;
+    // tmp_val_i is used to set the value array in the macro
+    uintptr_t cap,num, tmp_val_i;
+    uint8_t err,outside_mem;
+} hm_info;
+
+hm_info * hm_info_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : (hm_info*)ptr - 1;
+}
+
+uint8_t *hm_val_meta_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
+}
+
+hash_fn_t hm_hash_func(void *ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
+}
+
+realloc_fn_t hm_realloc_fn(void *ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->realloc_fn;
+}
+
+hash_bucket* hm_bucket_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->buckets;
 }
 
 uintptr_t hm_cap(void * ptr){
-    return dynarr_cap(ptr);
+    hm_info* tmmp = hm_info_ptr(ptr);
+    return (tmmp == NULL) ? 0 : tmmp->cap;
 }
 
 uintptr_t hm_num(void * ptr){
-    return dynarr_len(ptr);
+    hm_info* tmmp = hm_info_ptr(ptr);
+    return (tmmp == NULL) ? 0 : tmmp->num;
 }
 
 void hm_set_err(void * ptr, ds_error_e err){
-    dynarr_set_err(ptr, err);
+    if (ptr != NULL){
+        hm_info_ptr(ptr)->err = err;
+    }
 }
 
 ds_error_e hm_err(void * ptr){
-    return dynarr_err(ptr);
+    if (ptr == NULL){
+        return ds_null_ptr;
+    }
+    return hm_info_ptr(ptr)->err;
 }
 
 bool hm_is_err_set(void * ptr){
-    return dynarr_is_err_set(ptr);
+    return hm_err(ptr) != ds_success;
 }
 
 char * hm_err_str(void *ptr){
     return ds_get_err_str(hm_err(ptr));
+}
+
+void _hm_free(void * ptr){
+    if (ptr != NULL){
+        realloc_fn_t realloc_fn = hm_realloc_fn(ptr);
+        (void)realloc_fn(hm_bucket_ptr(ptr), 0);
+        (void)realloc_fn(hm_info_ptr(ptr), 0);
+    }
+}
+
+#define hm_free(ptr) _hm_free(ptr),ptr=NULL
+
+#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_bare_realloc(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
+
+bool hm_slot_empty(uintptr_t index){
+    return index == DEX_TS;
+}
+
+bool hm_val_empty(uint8_t val_meta, uint8_t slot_num){
+    uint8_t mask = 1 << slot_num;
+    return (mask & val_meta) == 0;
+}
+
+// return UINT8_MAX on error
+uint8_t hm_val_meta_to_open_i(uint8_t input){
+    // a zero bit means the slot's open
+    if (input == UINT8_MAX) { return UINT8_MAX; }
+    uint8_t slot_i = 0;
+    for (; (input & 1) == 1; input >>= 1,++slot_i){ }
+
+    return slot_i;
+}
+
+uint8_t highest_set_bit(uint8_t n){
+    n |= (n >> 1);
+    n |= (n >> 2);
+    n |= (n >> 4);
+    return n - (n >> 1);
+}
+
+uint8_t highest_set_bit_i(uint8_t input){
+    uint8_t top_bit_set = highest_set_bit(input);
+    uint8_t ret = 0;
+    if (top_bit_set == 0) return 0;
+
+    for (; (top_bit_set & 1) == 0; top_bit_set>>=1,++ret){ }
+
+    return ret;
+}
+
+
+bool hm_val_slot_open(uint8_t val_meta){
+    return val_meta < UINT8_MAX;
 }
 
 uintptr_t next_pow2(uintptr_t input){
@@ -152,229 +154,330 @@ uintptr_t next_pow2(uintptr_t input){
     return input;
 }
 
-uintptr_t truncate_to_cap(uintptr_t num, void* ptr){
+uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
     return num & (hm_cap(ptr) - 1);
 }
 
-bool hmap_storage_bit_set(uint8_t num){
-    return (num >= 0b10000000);
-}
+// This function is used for
+// - finding a key slot
+// - finding a key to delete
+// - finding a value index
+// - probe for slots 
+// - finding an empty slot
+// - finding a slot with a key in it
+//
+// if dex_slot_out is NULL, then don't look for a dex slot
+// returns key slot
+static uintptr_t key_find_helper(
+    void *ptr,
+    uintptr_t key,
+    uintptr_t *dex_slot_out,
+    bool find_empty){
 
-uintptr_t jump_distance(uint8_t i){
-    // truncate to lower 7 bits
-    i &= 0x7f;
-    uintptr_t tri_input = (i - 10)*(i > 15);
-    uintptr_t i_minus = (i - 81)*(i >= 82);
-    tri_input += (i_minus + i_minus*i_minus + i_minus*i_minus*i_minus);
-    uintptr_t tri_out = (tri_input*(tri_input+1)) >> 1;
-    return i*(i < 16) + tri_out;
-}
+    // only error out regarding size constraints when looking for an empty slot
+    if (!find_empty && hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-key_meta_group* hm_bare_meta_ptr(void * ptr, size_t item_size){
-    if (ptr == NULL){
-        return NULL;
-    }
-    uintptr_t size_to_pass = item_size * hm_cap(ptr);
-    key_meta_group * meta_ptr = (uint8_t*)ptr + size_to_pass;
-    return meta_ptr;
-}
+    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
 
-#define hm_meta_ptr(ptr) hm_bare_meta_ptr(ptr, sizeof(*(ptr)))
+    uintptr_t key_ret_i = UINTPTR_MAX;
+    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_bucket_is(truncated_hash, bucket_i, key_i);
 
-// This returns UINTPTR_MAX upon failure
-// This table uses jump distances to put other items into the array of keys and items
-// Theh top bit is set if a matching hash is there, the rest of the 7 bits are the jump distance
-// if the jump distance is 0 and the  key does not match, then there are no more items matching that
-// hash, if the top bit of the byte array is set, then the slot is being used for storage, and 
-// the key in there does not match the key hash
-// TODO: return NULL ptr instead of an err value
-uintptr_t hm_find_item(void * ptr, uint64_t key, size_t item_size){
-    // start looking for the key in the metadata
-    key_meta_group* meta = hm_bare_meta_ptr(ptr, item_size);
-    if (meta == NULL){
-        return UINTPTR_MAX;
-    }
-    uint64_t hash = C_DS_HASH_FUNC((uint8_t*)&key, sizeof(uint64_t));
-    uintptr_t truncated_hash = truncate_to_cap(hash, ptr);
-    // meta groups are groups of 16, so find which group this is in.
-    uintptr_t group_num = truncated_hash/GROUP_SIZE;
-    uint16_t group_i = truncated_hash - group_num*GROUP_SIZE;
+    uintptr_t val_i; uint8_t val_bit_i;
+    one_i_to_val_is(truncated_hash, val_i, val_bit_i);
 
-    uint8_t lower_7 = 0x7f & meta[group_num].meta[group_i];
-    // if the storage bit is set, then there is no hit here.
-    // We also need to check if we should keep looking for items
-    if (hmap_storage_bit_set(meta[group_num].meta[group_i]) || 
-            (key != meta[group_num].keys[group_i] && lower_7 == 0)){
-        // no item found
-        return UINTPTR_MAX;
-    }
+    hash_bucket* buckets = hm_bucket_ptr(ptr);
+    if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
-    do{
-        if (key == meta[group_num].keys[group_i]){
-            return group_num*GROUP_SIZE + group_i;
-        }
+    // needs to be larger than the size of a bucket
+    // chosen somewhat randomly
+    uint8_t probe_try = PROBE_TRIES;
+    for (; probe_try > 0; --probe_try){
 
-        // go through the linked list until we get to the end.
-        uintptr_t j_dist = jump_distance(meta[group_num].meta[group_i]);
-        uintptr_t new_i = truncate_to_cap(j_dist + group_num*GROUP_SIZE + group_i, ptr);
-        group_num = new_i/GROUP_SIZE;
-        group_i = new_i - group_num*GROUP_SIZE;
-    }while ((meta[group_num].meta[group_i] & 0x7f) != 0);
-
-    // we did not find it if we get here:
-    return UINTPTR_MAX;
-}
-
-// return the index of an empty slot
-// assume finding a 0 key means the slot is open.
-// if the storage bit is set then you can insert into that slot
-// TODO add size checks
-uintptr_t hm_find_empty_slot(void * ptr, uint64_t key, size_t item_size){
-    // start looking for the key in the metadata
-    key_meta_group* meta = hm_bare_meta_ptr(ptr, item_size);
-    if (meta == NULL){
-        return UINTPTR_MAX;
-    }
-    uint64_t hash = C_DS_HASH_FUNC((uint8_t*)&key, sizeof(uint64_t));
-    uintptr_t truncated_hash = hash & (hm_cap(ptr) - 1);
-    // meta groups are groups of 16, so find which group this is in.
-    uintptr_t group_num = truncated_hash/GROUP_SIZE;
-    uint16_t group_i = truncated_hash - group_num*GROUP_SIZE;
-
-    uint8_t lower_7 =  0;
-    do{
-        lower_7 = 0x7f & meta[group_num].meta[group_i];
-
-        // found an empty slot
-        if (hmap_storage_bit_set(meta[group_num].meta[group_i]) || 
-                (meta[group_num].keys[group_i] == 0 && lower_7 == 0)){
-            return group_num*GROUP_SIZE + group_i;
-        }
-        // go through the linked list until we get to the end.
-        if (lower_7 > 0){
-            // jump to the next item
-            uintptr_t j_dist = jump_distance(meta[group_num].meta[group_i]);
-            uintptr_t new_i = truncate_to_cap(j_dist + group_num*GROUP_SIZE + group_i, ptr);
-            group_num = new_i/GROUP_SIZE;
-            group_i = new_i - group_num*GROUP_SIZE;
-        }
-        else {
-            // we are at the end of the linked list, so try out jump distances to see if we can find a fit
-            for (uint8_t i = 1; i <=0x7f; ++i){
-                uintptr_t j_dist = jump_distance(i);
-                uintptr_t new_i = truncate_to_cap(j_dist + group_num*GROUP_SIZE + group_i, ptr);
-                uintptr_t tmp_grp = new_i/GROUP_SIZE;
-                uintptr_t tmp_i = new_i - tmp_grp*GROUP_SIZE;
-
-                // see if the slot is empty
-                if (hmap_storage_bit_set(meta[tmp_grp].meta[tmp_i]) ||
-                        (meta[tmp_grp].keys[tmp_i] == 0 && (meta[tmp_grp].meta[tmp_i] & 0x7f) == 0)){
-                    return new_i;
-                }
-
+        if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
+            uint8_t slot = hm_val_meta_to_open_i(hm_val_meta_ptr(ptr)[val_i]);
+            if (slot != UINT8_MAX){
+                *dex_slot_out = val_i*GROUP_SIZE + slot;
             }
-            // TODO: reallocate at this point.
-            return UINTPTR_MAX;
         }
 
-    }while (lower_7 > 0);
+        // search the bucket and see if we can insert
+        uint8_t i = 0;
+        for (; i < GROUP_SIZE; ++i){
+            // if the key matches, then pass out the index we already have
+            if (find_empty){
+                if (buckets[bucket_i].indices[i] == DEX_TS){
+                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
+                    goto val_search;
+                }
+            } else {
+                // look for the key
+                if (buckets[bucket_i].keys[i] == key && 
+                    buckets[bucket_i].indices[i] != DEX_TS){
+                    if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[i]; }
+                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
+                    goto val_search;
+                }
+            }
+        }
+        // probe by hashing the hash for another place to look
+        hash = hm_hash_func(ptr)(&hash, sizeof(hash));
+        uintptr_t main_i = truncate_to_cap(ptr, hash);
+        one_i_to_bucket_is(main_i, bucket_i, key_i);
+        one_i_to_val_is(main_i, val_i, val_bit_i);
+    }
+    if (probe_try == 0 || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
 
-    // we did not find it if we get here:
-    return UINTPTR_MAX;
+val_search:
+    // start looking through everything for a val slot
+    // use the old values of bucket_i and key_i
+    if (dex_slot_out != NULL && find_empty){
+        for (; *dex_slot_out == UINTPTR_MAX;){
+            uint8_t val_meta = hm_val_meta_ptr(ptr)[val_i];
+            uint8_t slot = hm_val_meta_to_open_i(val_meta);
+            if (slot != UINT8_MAX){
+                *dex_slot_out = val_i*GROUP_SIZE + slot;
+                break;
+            }
+            hash = hm_hash_func(ptr)(&hash, sizeof(hash));
+            uintptr_t main_i = truncate_to_cap(ptr, hash);
+            one_i_to_val_is(main_i, val_i, val_bit_i);
+        }
+    }
+
+    return key_ret_i;
 }
 
-void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size);
+// basically an insert, but we don't need to look for a dex slot
+static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
 
-#define hm_set(ptr, key, val) ptr = hm_bare_set(ptr, key, &val, sizeof(val))
+    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){
+    uintptr_t key_dex = key_find_helper(
+            ptr,
+            key,
+            NULL,
+            true);
+    if (key_dex == UINTPTR_MAX){ return UINTPTR_MAX; }
 
-    c_ds_info *base_ptr = NULL;
-    if (ptr != NULL){
-        base_ptr = hm_info_ptr(ptr);
-    }
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_bucket_is(key_dex, bucket_i, key_i);
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    buckets[bucket_i].indices[key_i] = dex;
+    buckets[bucket_i].keys[key_i] = key;
+
+    return 0;
+}
+
+// handle both the init and growing case, but not shrinking yet.
+void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
+
+    item_count = (item_count < 2*GROUP_SIZE) ? 2*GROUP_SIZE : item_count;
+
+    // should be null safe, base_ptr will be null if ptr is null
+    hm_info *base_ptr = hm_info_ptr(ptr);
 
     uintptr_t new_cap = next_pow2(item_count);
 
-    uintptr_t num_key_blocks = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
-    uintptr_t new_size = new_cap*item_size + num_key_blocks*sizeof(key_meta_group) + sizeof(c_ds_info);
+    uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
+    uintptr_t old_num_val_metas = hm_cap(ptr)/8;
+    uintptr_t num_buckets = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
+    uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
+    uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
 
-    c_ds_info* new_ptr = C_DS_REALLOC(NULL, new_size);
-    if (new_ptr == NULL){
+    hm_info * inf_ptr = realloc_fn(base_ptr, data_size);
+    if (inf_ptr == NULL){
         hm_set_err(ptr, ds_alloc_fail);
+        // old pointer is still good, return that
         return ptr;
-    } else {
-        new_ptr->cap = new_cap;
-        new_ptr->outside_mem = false;
-        new_ptr->err = ds_success;
-        new_ptr->len = 0;
-        // copy over necessary parts of the old table if there is one.
-        if (base_ptr == NULL || base_ptr->cap == 0){
-            // previous table was empty, don't coyp or re-insert anything
-            new_ptr->len = 0;
-            ++new_ptr;
-            memset(new_ptr, 0, new_size - sizeof(c_ds_info));
-            return new_ptr;
-        } else {
-            ++new_ptr;
-            memset(new_ptr, 0, new_size - sizeof(c_ds_info));
+    }
 
-            // go through the meta table and re-hash everything to insert
-            // it into the new table.
-            key_meta_group* old_meta = hm_bare_meta_ptr(ptr, item_size);
-            // TODO: run insert in a loop while iterating over the old
-            // table
-            for (uintptr_t key_i = 0; base_ptr->len > 0 && key_i < hm_cap(new_ptr); ++key_i){
-                // if you find a 0 key, then skip it.
-                uintptr_t group_num = key_i/GROUP_SIZE;
-                uint16_t group_i = key_i - group_num*GROUP_SIZE;
-                uint64_t key = old_meta[group_num].keys[group_i];
-                if (key != 0){
-                    uint8_t * val_ptr = (uint8_t*)ptr + item_size*key_i;
-                    hm_bare_set(new_ptr, key, val_ptr, item_size); 
-                    if (hm_is_err_set(new_ptr)){
-                        // return the old table
-                        void * _free_me = C_DS_REALLOC(new_ptr, 0);
-                        (void)_free_me;
-                        base_ptr->err = ds_not_found;
-                        return ptr;
-                    }
-                    --base_ptr->len;
+    uintptr_t num_val_metas = (new_cap + 7)/8;
+    // Don't use base_ptr->val_metas, That can get zeroed out after it's reallocated
+    uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : inf_ptr->val_metas;
+    uint8_t *new_val_metas = realloc_fn(old_val_metas, num_val_metas);
+    if (new_val_metas == NULL){
+        ++inf_ptr;
+        hm_set_err(inf_ptr, ds_alloc_fail);
+        return inf_ptr;
+    }
+
+    inf_ptr->val_metas = new_val_metas;
+
+    // zero out new val_meta portion to 
+    for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
+        inf_ptr->val_metas[i] = 0;
+    }
+
+    // old_bucket_ptr is not necessary if allocating from scratch
+    hash_bucket *old_bucket_ptr = inf_ptr->buckets;
+    hash_bucket *bucket_ptr = realloc_fn(NULL, bucket_size);
+    if (bucket_ptr == NULL){
+        ++inf_ptr;
+        hm_set_err(inf_ptr, ds_alloc_fail);
+        return inf_ptr;
+    }
+
+    // associate the key pointer with the new structure
+    inf_ptr->buckets = bucket_ptr;
+    inf_ptr->cap = new_cap;
+    inf_ptr->outside_mem = false;
+
+    if (base_ptr == NULL){
+        //allocating new array
+        inf_ptr->num = 0;
+        inf_ptr->realloc_fn = realloc_fn;
+        inf_ptr->hash_func = hash_func;
+    }
+
+    // set the new meta to empty
+    for (uintptr_t i = 0; i < num_buckets; ++i){
+        for (uint16_t j = 0; j < GROUP_SIZE; ++j){
+            inf_ptr->buckets[i].indices[j] = DEX_TS;
+        }
+    }
+    ++inf_ptr;
+
+    // we should be done if we are just allocating
+    if (base_ptr == NULL){
+        return inf_ptr;
+    }
+
+    // TODO re-insert keys, but leave the indexes since they're okay
+    uintptr_t num_items = hm_num(inf_ptr);
+    // search the old key structure for keys
+    for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
+        for (uint8_t i = 0; i < GROUP_SIZE; ++i){
+            if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
+                // hash the key here and re-insert it into the new array.
+                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
+                uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
+
+                uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
+                // upon error, revert the indices and return a failure
+                if (ret == UINTPTR_MAX){
+                    hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
+                    // free the old memory
+                    (void)realloc_fn(bucket_ptr, 0);
+                    goto done;
+                } 
+                --num_items;
+                if (num_items == 0){
+                    goto free_old_bucket;
                 }
             }
-            // free old memory
-            void * _ignore_this = C_DS_REALLOC(base_ptr, 0);
-            (void)_ignore_this;
-            return new_ptr;
         }
     }
+
+    // success, free old buckets
+free_old_bucket:
+    (void)realloc_fn(old_bucket_ptr, 0);
+
+done:
+    hm_set_err(inf_ptr, ds_success);
+    return inf_ptr;
 }
 
-#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, new_cap, sizeof(*ptr))
+#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, hm_realloc_fn(ptr), hm_hash_func(ptr), new_cap, sizeof(*ptr))
 
-void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){
-    uintptr_t __found_location_dex = hm_find_empty_slot(ptr, key, val_size);
-    uint8_t* byte_ptr = (uint8_t*)ptr;
-    if (__found_location_dex != UINTPTR_MAX){
-        uint16_t __c_ds_group_num = __found_location_dex/GROUP_SIZE;
-        uint16_t __c_ds_group_i = __found_location_dex - __c_ds_group_num*GROUP_SIZE;
-        key_meta_group * meta_ptr = hm_bare_meta_ptr(ptr, val_size);
-        meta_ptr[__c_ds_group_num].keys[__c_ds_group_i] = key;
-        memcpy(&byte_ptr[val_size*__found_location_dex], val_ptr, val_size);
-        hm_info_ptr(ptr)->len++;
-    } else {
-        // try to reallocate
-        ptr = hm_bare_realloc(ptr,hm_cap(ptr) + 1, val_size);
-        if (hm_is_err_set(ptr)){
-            return ptr;
-        }
+// returns the value index
+// sets the key slot found
+// dex out is the index where the key is in the the bucket array
+uintptr_t hm_raw_insert_key(
+        void *ptr, 
+        uintptr_t key)
+{
+    if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-        ptr = hm_bare_set(ptr, key, val_ptr, val_size);
-        if (hm_is_err_set(ptr)){
-            return ptr;
-        }
+    uintptr_t val_dex = UINTPTR_MAX;
+    uintptr_t key_dex_out = key_find_helper(
+            ptr,
+            key,
+            &val_dex,
+            true);
+
+    if (key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
+
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_bucket_is(key_dex_out, bucket_i, key_i);
+
+    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    // only increment the num if we are not replacing a key
+    if (buckets[bucket_i].indices[key_i] == DEX_TS){
+        hm_info_ptr(ptr)->num++;
+    }
+    buckets[bucket_i].keys[key_i] = key;
+    buckets[bucket_i].indices[key_i] = val_dex;
+
+    bit_set_or_clear(hm_val_meta_ptr(ptr), val_dex, true);
+
+    hm_info_ptr(ptr)->tmp_val_i = val_dex;
+
+    return val_dex;
+}
+
+#define hm_set(ptr, k, v)\
+    do{\
+        for (uint8_t __hm_grow_tries = 2; __hm_grow_tries > 0; --__hm_grow_tries){\
+            hm_info_ptr(ptr)->tmp_val_i = hm_raw_insert_key(ptr, k);\
+            if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
+                ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
+                hm_set_err(ptr, ds_success); \
+                break;\
+            } else { \
+                hm_set_err(ptr, ds_not_found); \
+            } \
+            hm_realloc(ptr, hm_cap(ptr)+1);\
+        }\
+    }while(0)
+
+static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
+
+    uintptr_t key_dex = key_find_helper(
+            ptr,
+            key,
+            NULL,
+            false);
+
+    if (key_dex == UINTPTR_MAX){ 
         hm_set_err(ptr, ds_not_found);
+        return UINTPTR_MAX; 
     }
-    return ptr;
+
+    uintptr_t key_bucket; uint8_t key_i;
+    one_i_to_bucket_is(key_dex, key_bucket, key_i);
+    return hm_bucket_ptr(ptr)[key_bucket].indices[key_i];
 }
 
+#define hm_get(ptr, key, val_to_set)\
+    do {\
+        uintptr_t __val_i = hm_find_val_i(ptr, key);\
+        if (__val_i != UINTPTR_MAX){\
+            val_to_set = ptr[__val_i];\
+        }\
+    } while(0)
+
+void hm_del(void *ptr, uintptr_t key){
+
+    uintptr_t val_dex, key_dex = key_find_helper(
+            ptr,
+            key,
+            &val_dex,
+            false);
+
+    if (key_dex == UINTPTR_MAX){
+        hm_set_err(ptr, ds_not_found);
+        return;
+    }
+
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_bucket_is(key_dex, bucket_i, key_i);
+
+    hash_bucket * buckets = hm_bucket_ptr(ptr);
+
+    bit_set_or_clear(hm_val_meta_ptr(ptr), buckets[bucket_i].indices[key_i], false);
+
+    buckets[bucket_i].indices[key_i] = DEX_TS;
+    hm_set_err(ptr, ds_success);
+}

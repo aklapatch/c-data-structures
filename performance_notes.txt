@@ -1,0 +1,5 @@
+Adding quadratic probes to values searching really sped things up.
+I may add a version of cuckoo hashing next (hash the hash to find the
+next slot).
+Searching for values still takes a lot of time.
+Changing to a version of cuckoo hash makes lookups take longer.

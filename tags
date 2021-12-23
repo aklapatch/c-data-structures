@@ -1,0 +1,119 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+CFLAGS	makefile	/^CFLAGS=-ggdb -Og -Wall -Wextra$/;"	m
+C_DS_AHASH_MULTIPLE	src/hmap.h	18;"	d
+C_DS_FREE	src/dynarr.h	16;"	d
+C_DS_HASH_FUNC	src/hmap.h	21;"	d
+C_DS_HASH_SEED1	src/hmap.h	10;"	d
+C_DS_HASH_SEED2	src/hmap.h	14;"	d
+C_DS_REALLOC	src/alloc_fail_tests.c	7;"	d	file:
+C_DS_REALLOC	src/dynarr.h	13;"	d
+GROUP_SIZE	src/hmap.h	110;"	d
+LIST_OFF_MASK	src/hmap.h	108;"	d
+META_EMPTY	src/hmap.h	102;"	d
+OUTDIR	makefile	/^OUTDIR=.\/build\/$/;"	m
+RET_SWITCH_STR	src/dynarr.h	35;"	d
+RND_TO_GRP_NUM	src/hmap.h	204;"	d
+ROUNDS	src/hash_test.c	2;"	d	file:
+STORAGE_BIT_MASK	src/hmap.h	105;"	d
+TEST	src/test_helpers.h	5;"	d
+TESTERRFAIL	src/test_helpers.h	20;"	d
+TESTERRSUCCESS	src/test_helpers.h	13;"	d
+ahash_buf	src/hmap.h	/^uint64_t ahash_buf(uint8_t *data, size_t data_len){$/;"	f
+ahash_rotl	src/hmap.h	/^uint64_t ahash_rotl(uint64_t n, int32_t c){$/;"	f
+ahash_rotr	src/hmap.h	/^uint64_t ahash_rotr(uint64_t n, int32_t c){$/;"	f
+ahash_update	src/hmap.h	/^void ahash_update(uint64_t * buf, uint64_t * pad, uint64_t data_in){$/;"	f
+ahash_update_128	src/hmap.h	/^void ahash_update_128(uint64_t * buf, uint64_t * pad, uint64_t data_in[2]){$/;"	f
+ahash_wrapping_add	src/hmap.h	/^uint64_t ahash_wrapping_add(uint64_t a, uint64_t b){$/;"	f
+ahash_wrapping_mul	src/hmap.h	/^uint64_t ahash_wrapping_mul(uint64_t a, uint64_t b){$/;"	f
+bad_realloc	src/alloc_fail_tests.c	/^void * bad_realloc(void*ptr, size_t size){$/;"	f
+bare_dyarr_deln	src/dynarr.h	/^void bare_dyarr_deln(void* ptr, uintptr_t del_i, uintptr_t n, uintptr_t item_size){$/;"	f
+bare_dyarr_insertn	src/dynarr.h	/^void bare_dyarr_insertn(void* ptr, void* items, uintptr_t start_i, uintptr_t n, uintptr_t item_size){$/;"	f
+bare_dynarr_init_from_buf	src/dynarr.h	/^void *bare_dynarr_init_from_buf(void* buf, uintptr_t buf_size_bytes, uintptr_t item_size){$/;"	f
+bare_dynarr_maybe_grow	src/dynarr.h	/^void* bare_dynarr_maybe_grow(void * ptr, uintptr_t new_count, uintptr_t item_size){$/;"	f
+bare_dynarr_realloc	src/dynarr.h	/^void* bare_dynarr_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){$/;"	f
+c_ds_info	src/dynarr.h	/^typedef struct c_ds_info {$/;"	s
+c_ds_info	src/dynarr.h	/^} c_ds_info;$/;"	t	typeref:struct:c_ds_info
+cap	src/dynarr.h	/^    uintptr_t len,cap;$/;"	m	struct:c_ds_info
+ds_alloc_fail	src/dynarr.h	/^    ds_alloc_fail,$/;"	e	enum:ds_error_e
+ds_bad_param	src/dynarr.h	/^    ds_bad_param,$/;"	e	enum:ds_error_e
+ds_dynarr	src/dynarr.h	/^    ds_dynarr= 0,$/;"	e	enum:__anon2
+ds_error_e	src/dynarr.h	/^typedef enum ds_error_e {$/;"	g
+ds_error_e	src/dynarr.h	/^} ds_error_e;$/;"	t	typeref:enum:ds_error_e
+ds_fail	src/dynarr.h	/^    ds_fail, \/\/ That one error code you hate getting because you don't know what went wrong$/;"	e	enum:ds_error_e
+ds_get_err_str	src/dynarr.h	/^char * ds_get_err_str(ds_error_e err){$/;"	f
+ds_hm	src/dynarr.h	/^    ds_hm,$/;"	e	enum:__anon2
+ds_not_found	src/dynarr.h	/^    ds_not_found,$/;"	e	enum:ds_error_e
+ds_null_ptr	src/dynarr.h	/^    ds_null_ptr,$/;"	e	enum:ds_error_e
+ds_num_errors	src/dynarr.h	/^    ds_num_errors,$/;"	e	enum:ds_error_e
+ds_out_of_bounds	src/dynarr.h	/^    ds_out_of_bounds,$/;"	e	enum:ds_error_e
+ds_success	src/dynarr.h	/^    ds_success = 0,$/;"	e	enum:ds_error_e
+ds_type	src/dynarr.h	/^} ds_type;$/;"	t	typeref:enum:__anon2
+ds_unimp	src/dynarr.h	/^    ds_unimp, \/\/ function not implemented$/;"	e	enum:ds_error_e
+ds_wrong_ds	src/dynarr.h	/^    ds_wrong_ds, \/\/ used a hashmap function on an array or vice versa$/;"	e	enum:ds_error_e
+dynarr_alloc	src/dynarr.h	221;"	d
+dynarr_append	src/dynarr.h	319;"	d
+dynarr_appendn	src/dynarr.h	317;"	d
+dynarr_cap	src/dynarr.h	/^uintptr_t dynarr_cap(void *ptr){$/;"	f
+dynarr_del	src/dynarr.h	280;"	d
+dynarr_deln	src/dynarr.h	278;"	d
+dynarr_err	src/dynarr.h	/^ds_error_e dynarr_err(void* ptr){$/;"	f
+dynarr_err_str	src/dynarr.h	/^char * dynarr_err_str(void* ptr){$/;"	f
+dynarr_free	src/dynarr.h	/^void dynarr_free(void * ptr){$/;"	f
+dynarr_get_info	src/dynarr.h	/^c_ds_info * dynarr_get_info(void * ptr){$/;"	f
+dynarr_init_from_buf	src/dynarr.h	181;"	d
+dynarr_insert	src/dynarr.h	304;"	d
+dynarr_insertn	src/dynarr.h	297;"	d
+dynarr_is_err_set	src/dynarr.h	/^bool dynarr_is_err_set(void * ptr){$/;"	f
+dynarr_len	src/dynarr.h	/^uintptr_t dynarr_len(void *ptr){$/;"	f
+dynarr_maybe_grow	src/dynarr.h	263;"	d
+dynarr_outside_mem	src/dynarr.h	/^bool dynarr_outside_mem(void *ptr){$/;"	f
+dynarr_pop	src/dynarr.h	282;"	d
+dynarr_print	src/dynarr.h	/^void dynarr_print(void *ptr){$/;"	f
+dynarr_set_cap	src/dynarr.h	232;"	d
+dynarr_set_err	src/dynarr.h	/^void dynarr_set_err(void * ptr, ds_error_e err){$/;"	f
+dynarr_set_len	src/dynarr.h	234;"	d
+err	src/dynarr.h	/^    ds_error_e err; \/\/ if an error has occurred$/;"	m	struct:c_ds_info
+hash_table	src/dynarr.h	/^    bool outside_mem,hash_table;  \/\/ if we are using memory from outside of dynarr funcions.$/;"	m	struct:c_ds_info
+hm_bare_get	src/hmap.h	/^void hm_bare_get(void * ptr, uint64_t key, void * out_ptr, size_t val_size){$/;"	f
+hm_bare_meta_ptr	src/hmap.h	/^key_meta_group* hm_bare_meta_ptr(void * ptr){$/;"	f
+hm_bare_realloc	src/hmap.h	/^void* hm_bare_realloc(void * ptr,uintptr_t item_count, uintptr_t item_size){$/;"	f
+hm_bare_set	src/hmap.h	/^void *hm_bare_set(void * ptr, uint64_t key, void * val_ptr, uintptr_t val_size){$/;"	f
+hm_bare_set_member	src/hmap.h	/^void hm_bare_set_member(void * ptr, uintptr_t set_i){$/;"	f
+hm_base_ptr	src/hmap.h	/^void * hm_base_ptr(void* ptr){$/;"	f
+hm_cap	src/hmap.h	/^uintptr_t hm_cap(void * ptr){$/;"	f
+hm_err	src/hmap.h	/^ds_error_e hm_err(void * ptr){$/;"	f
+hm_err_str	src/hmap.h	/^char * hm_err_str(void *ptr){$/;"	f
+hm_get	src/hmap.h	354;"	d
+hm_info_ptr	src/hmap.h	/^c_ds_info * hm_info_ptr(void * ptr){$/;"	f
+hm_is_err_set	src/hmap.h	/^bool hm_is_err_set(void * ptr){$/;"	f
+hm_list_off	src/hmap.h	/^uint8_t hm_list_off(uint8_t num){$/;"	f
+hm_meta_ptr	src/hmap.h	200;"	d
+hm_num	src/hmap.h	/^uintptr_t hm_num(void * ptr){$/;"	f
+hm_realloc	src/hmap.h	267;"	d
+hm_set	src/hmap.h	205;"	d
+hm_set_err	src/hmap.h	/^void hm_set_err(void * ptr, ds_error_e err){$/;"	f
+hm_slot_empty	src/hmap.h	/^bool hm_slot_empty(uint8_t num){$/;"	f
+hm_slot_storage	src/hmap.h	/^bool hm_slot_storage(uint8_t num){$/;"	f
+jump_distance	src/hmap.h	/^uintptr_t jump_distance(uint8_t i){$/;"	f
+key_meta_group	src/hmap.h	/^} key_meta_group;$/;"	t	typeref:struct:__anon3
+keys	src/hmap.h	/^    uint64_t keys[GROUP_SIZE];$/;"	m	struct:__anon3
+len	src/dynarr.h	/^    uintptr_t len,cap;$/;"	m	struct:c_ds_info
+main	src/alloc_fail_tests.c	/^int main(){$/;"	f
+main	src/hash_test.c	/^int main(){$/;"	f
+main	src/hmap_test.c	/^int main(){$/;"	f
+main	src/test_main.c	/^int main(){$/;"	f
+meta	src/hmap.h	/^    uint8_t meta[GROUP_SIZE];$/;"	m	struct:__anon3
+next_pow2	src/hmap.h	/^uintptr_t next_pow2(uintptr_t input){$/;"	f
+outside_mem	src/dynarr.h	/^    bool outside_mem,hash_table;  \/\/ if we are using memory from outside of dynarr funcions.$/;"	m	struct:c_ds_info
+print_vals	src/test_main.c	/^void print_vals(uint8_t * ptr){$/;"	f
+size_classes	src/dynarr.h	/^} size_classes;$/;"	t	typeref:enum:__anon1
+size_u16	src/dynarr.h	/^    size_u16,$/;"	e	enum:__anon1
+size_u32	src/dynarr.h	/^    size_u32,$/;"	e	enum:__anon1
+size_u64	src/dynarr.h	/^    size_u64,$/;"	e	enum:__anon1
+size_u8	src/dynarr.h	/^    size_u8 = 0,$/;"	e	enum:__anon1
+truncate_to_cap	src/hmap.h	/^uintptr_t truncate_to_cap(void* ptr, uintptr_t num){$/;"	f
