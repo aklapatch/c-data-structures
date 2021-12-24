@@ -13,6 +13,7 @@ int main(){
     TEST_INT_EQ(hm_num(hmap), 0);
     TEST_INT_EQ(hm_err(hmap), ds_success);
     TEST_INT_EQ(hm_cap(hmap), 32);
+    TEST_GROUP_OK();
 
     // insert a lot of values and see how this goes.
     TEST_GROUP("Insert a few keys");
@@ -34,6 +35,7 @@ int main(){
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
+    TEST_GROUP_OK();
 
     TEST_GROUP("Realloc key preservation");
     hm_realloc(hmap, 64);
@@ -44,6 +46,7 @@ int main(){
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
+    TEST_GROUP_OK();
 
     // try deleting all the keys and make sure they're gone
     TEST_GROUP("Ensure deletion");
@@ -55,10 +58,12 @@ int main(){
         hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_not_found);
     }
+    TEST_GROUP_OK();
 
     TEST_GROUP("hmap free");
     hm_free(hmap);
     TEST_PTR_EQ(hmap, NULL);
+    TEST_GROUP_OK();
 
     TEST_GROUP("Bulk insert");
     hm_init(hmap, 32, realloc, ahash_buf);
@@ -80,6 +85,7 @@ int main(){
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
+    TEST_GROUP_OK();
 
     return 0;
 }
