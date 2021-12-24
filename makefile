@@ -1,6 +1,7 @@
 DBG_CFLAGS=-g3 -Wall -Wextra -pg
 OPT_CFLAGS=-Wall -Wextra -O2
 PROFILE_CFLAGS=-pg -Wall -Wextra -O2 -g3
+MEM_CFLAGS=-Wall -Wextra -O0 -g3
 OUTDIR=./build/
 
 hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
@@ -24,6 +25,10 @@ clean:
 
 hmap_test: hmap
 	$(OUTDIR)/hmap_test | tee hmap_test.log
+
+mem_test: src/mem.h src/mem_test.c
+	$(CC) $(MEM_CFLAGS) src/mem_test.c -o $(OUTDIR)/mem_test
+	$(OUTDIR)/mem_test
 
 hmap_bench: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench

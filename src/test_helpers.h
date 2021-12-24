@@ -1,6 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 // These test tools are intended to be added in an ad hoc fashion.
 // you can set up your test program to make sure something works, and then add
@@ -11,7 +12,6 @@
 // print out a test group label
 #define TEST_GROUP(label) printf("[Test Group]: %s\n", label)
 
-#define TEST_GROUP_OK(label) printf("[Test Group]: %s: OK\n", label)
 #define TEST_GROUP_OK() printf("[Test Group]: OK\n")
 
 // We only want the expression (val1 or val2) to be evaluated once, but
@@ -35,3 +35,24 @@
 // (sarcastic)
 #define TEST_PTR_EQ(ptr1, ptr2) TEST_INT_EQ((uintptr_t)ptr1, (uintptr_t)ptr2)
 #define TEST_PTR_NEQ(ptr1, ptr2) TEST_INT_NEQ((uintptr_t)ptr1, (uintptr_t)ptr2)
+
+// return UINTPTR_MAX if equal
+uintptr_t where_uneql(void *ptr1, void *ptr2, size_t n){
+    uint8_t *ptr1_8 = (uint8_t*)ptr1, *ptr2_8 = (uint8_t*)ptr2;
+    for (uintptr_t i = 0; i < n; ++i){
+        if (ptr1_8[i] != ptr2_8[i]){
+            printf("[Test]: Elements %lu differ %x != %x\n", i, ptr1_8[i], ptr2_8[i]);
+            return i;
+        }
+    }
+    return UINTPTR_MAX;
+}
+
+#define TEST_MEM_EQL(ptr1, ptr2, n)\
+    do{\
+        uintptr_t _diff_i = where_uneql(ptr, ptr2,n);\
+        if (_diff_i != UINTPTR_MAX){\
+            printf("[Test]: %s @ %u FAIL!\n", __FILE__, __LINE__);\
+        }\
+    } while (0)
+
