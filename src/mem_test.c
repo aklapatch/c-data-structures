@@ -7,7 +7,7 @@
 #include "mem.h"
 
 #define SIZE (3*4096)
-#define TIMES (100)
+#define TIMES (200)
 
 int main(){
     // use 4 byte vals to get 4 byte alignment`
@@ -17,8 +17,6 @@ int main(){
     memset(in_buf, 0xff, sizeof(in_buf));
     memset(out_buf, 0, sizeof(out_buf));
     memset(ref_buf, 0xee, sizeof(ref_buf));
-
-
 
 #define SAVE_TIME(code, save_val)\
     do{\
@@ -64,10 +62,10 @@ int main(){
             }
 
             printf("alignment=%lu size=%u\n", (uintptr_t)ref_ptr % 4, buf_size);
-            printf("Naive cp: clocks=%lu time=%f\n", n_cp_time, (double)n_cp_time/CLOCKS_PER_SEC);
+            printf("Naive cp: clocks=%lu time=%f. ", n_cp_time, (double)n_cp_time/CLOCKS_PER_SEC);
             printf("Naive set: clocks=%lu time=%f\n", n_set_time, (double)n_set_time/CLOCKS_PER_SEC);
-            printf("cp: clocks=%lu time=%f\n", cp_time, (double)cp_time/CLOCKS_PER_SEC);
-            printf("set: clocks=%lu time=%f\n", set_time, (double)set_time/CLOCKS_PER_SEC);
+            printf("      cp: clocks=%lu time=%f. ", cp_time, (double)cp_time/CLOCKS_PER_SEC);
+            printf("      set: clocks=%lu time=%f\n", set_time, (double)set_time/CLOCKS_PER_SEC);
 
             // change the alignment to test different modes
             ++ref_ptr; ++in_ptr; ++out_ptr;

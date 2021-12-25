@@ -5,6 +5,9 @@
 // These will be more useful in an embedded or less optimized
 // platform where the vendor has not provided an optimized memcpy
 // (looking at you xilinx)
+// From my testing (on WSL on x86, so take it with a grain of salt), this copy 
+// and set are faster till about 8 bytes, then things are slower, then same or close
+// Test in your own environment before you make any conclusions.
 
     // half-word mask
 #define HW_MASK (sizeof(uint16_t) - 1)
@@ -78,7 +81,7 @@ void *mo_memset(void *dst, int val, size_t n){
 
     size_t len32 = (size_t)(end - (uint8_t*)dst16)/4;
     uint32_t *dst32 = (uint32_t*)dst16, *end32 = dst32 + len32;
-    uint32_t val32 = val16 * 0x00010001;
+    uint32_t val32 = val16 * 0x10001;
 
     for (; dst32 < end32; ++dst32){ *dst32 = val32; }
 
