@@ -48,11 +48,19 @@ uintptr_t where_uneql(void *ptr1, void *ptr2, size_t n){
     return UINTPTR_MAX;
 }
 
-#define TEST_MEM_EQL(ptr1, ptr2, n)\
+#define TEST_MEM_EQ(ptr1, ptr2, n)\
     do{\
-        uintptr_t _diff_i = where_uneql(ptr, ptr2,n);\
+        uintptr_t _diff_i = where_uneql(ptr1, ptr2,n);\
         if (_diff_i != UINTPTR_MAX){\
             printf("[Test]: %s @ %u FAIL!\n", __FILE__, __LINE__);\
+            exit(1);\
         }\
     } while (0)
 
+#define TEST_MEM_NEQ(ptr1, ptr2, n)\
+    do{\
+        if (memcmp(ptr1, ptr2, n) == 0){\
+            printf("[Test]: %s @ %u FAIL!\n", __FILE__, __LINE__);\
+            exit(1);\
+        }\
+    } while (0)

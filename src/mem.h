@@ -31,7 +31,6 @@ void *mo_memcpy(void *dst, const void *src, size_t n){
     const uint8_t *src8 = src, *src_end = src8 + n;
     uint8_t *dst8 = dst;
 
-
     // go up till a 2 byte boundary
     for (; src8 < src_end && ((uintptr_t)src8 & HW_MASK) != 0; ++src8,++dst8){ *dst8 = *src8; }
 
@@ -89,7 +88,7 @@ void *mo_memset(void *dst, int val, size_t n){
     for (; dst16 < end16; ++dst16){ *dst16 = val16; }
 
     // sync up
-    dst8 = (uint16_t*)dst16;
+    dst8 = (uint8_t*)dst16;
 
     // clean up
     for (; dst8 < end; ++dst8){ *dst8 = val8; }
