@@ -198,7 +198,7 @@ static uintptr_t key_find_helper(
         if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
             uint8_t slot = hm_val_meta_to_open_i(hm_val_meta_ptr(ptr)[val_i]);
             if (slot != UINT8_MAX){
-                *dex_slot_out = val_i*GROUP_SIZE + slot;
+                val_is_to_one_i(*dex_slot_out, val_i, slot);
             }
         }
 
@@ -237,7 +237,7 @@ val_search:
             uint8_t val_meta = hm_val_meta_ptr(ptr)[val_i];
             uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
-                *dex_slot_out = val_i*GROUP_SIZE + slot;
+                val_is_to_one_i(*dex_slot_out, val_i, slot);
                 break;
             }
             hash = hm_hash_func(ptr)(&hash, sizeof(hash));
@@ -273,7 +273,8 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
 // handle both the init and growing case, but not shrinking yet.
 void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
-    item_count = (item_count < 2*GROUP_SIZE) ? 2*GROUP_SIZE : item_count;
+    uint8_t greater_size = (GROUP_SIZE > 8) ? GROUP_SIZE : 8;
+    item_count = (item_count < 2*greater_size) ? 2*greater_size : item_count;
 
     // should be null safe, base_ptr will be null if ptr is null
     hm_info *base_ptr = hm_info_ptr(ptr);
