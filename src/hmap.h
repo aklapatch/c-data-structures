@@ -5,7 +5,7 @@
 // tombstone (empty) marker
 #define DEX_TS ((uintptr_t)UINT32_MAX)
 
-#define GROUP_SIZE (8)
+#define GROUP_SIZE (4)
 
 #define PROBE_TRIES (4)
 
