@@ -1,5 +1,8 @@
 Adding quadratic probes to values searching really sped things up.
-I may add a version of cuckoo hashing next (hash the hash to find the
-next slot).
-Searching for values still takes a lot of time.
+I may add a version of cuckoo hashing next (hash the hash to find the 
+next slot). (done, not much better than quadratic probing IIRC)
+Searching for values still takes a lot of time. (Fixed)
 Changing to a version of cuckoo hash makes lookups take longer.
+Tried splitting the table into 2 partitions, so that you are looking in
+a different section of memory when you find a collision, but that slowed
+things down
