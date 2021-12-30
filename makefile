@@ -28,7 +28,7 @@ hmap_test: hmap
 
 mem_test: src/mem.h src/mem_test.c
 	$(CC) $(MEM_CFLAGS) src/mem_test.c -o $(OUTDIR)/mem_test
-	$(OUTDIR)/mem_test
+	$(OUTDIR)/mem_test | tee mem_test.txt
 
 hmap_bench: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench
