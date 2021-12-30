@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #define TIMES (3*UINT16_MAX)
-#define RNDS (20)
+#define RNDS (40)
 // bench insertion, lookup, at least.
 // Benching deletion doesn't make too much sense.
 int main(){

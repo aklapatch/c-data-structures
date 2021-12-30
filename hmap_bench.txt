@@ -1,4 +1,4 @@
-9e1f969
+21d29c4
 model name	: Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz
-196605 insertions took 1.27039 sec 1270388 clocks over 20 runs
-196605 qeuries took 0.539854 sec 539854 clocks over 20 runs
+196605 insertions took 2.45145 sec 2451453 clocks over 40 runs
+196605 qeuries took 0.999783 sec 999783 clocks over 40 runs
