@@ -5,6 +5,7 @@
 // tombstone (empty) marker
 #define DEX_TS ((uintptr_t)UINT32_MAX)
 
+// keep as a pow2, a for loop uses this -1 as a mask
 #define GROUP_SIZE (4)
 
 #define PROBE_TRIES (4)
@@ -203,8 +204,8 @@ static uintptr_t key_find_helper(
         }
 
         // search the bucket and see if we can insert
-        uint8_t i = 0;
-        for (; i < GROUP_SIZE; ++i){
+        uint8_t i = key_i, times = GROUP_SIZE;
+        for (; times > 0; --times, i = (i + 1) & (GROUP_SIZE - 1)){
             // if the key matches, then pass out the index we already have
             if (find_empty){
                 if (buckets[bucket_i].indices[i] == DEX_TS){
