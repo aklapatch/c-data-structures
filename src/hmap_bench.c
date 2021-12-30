@@ -12,7 +12,7 @@
 int main(){
 
     // init hmap to minimum size with a reasonable sized payload type
-    clock_t ins_avg = 0, query_avg = 0;
+    clock_t ins_tot = 0, query_tot = 0;
     for (uint8_t j = RNDS; j > 0; --j){
         uint32_t *hmap = NULL;
         hm_init(hmap, 16, realloc, ahash_buf);
@@ -25,8 +25,7 @@ int main(){
                 exit(1);
             }
         }
-        clock_t end = clock();
-        ins_avg += end-start;
+        ins_tot += clock() - start;
 
         // search for all the keys we inserted.
         start = clock();
@@ -39,16 +38,13 @@ int main(){
             }
         }
 
-        end = clock();
-        query_avg += end - start;
+        query_tot += clock() - start;
 
         hm_free(hmap);
     }
 
-    query_avg /= RNDS;
-    ins_avg /= RNDS;
-    printf("%u insertions took %g sec %lu clocks avg over %u runs\n",TIMES, (double)(ins_avg)/CLOCKS_PER_SEC, ins_avg, RNDS);
-    printf("%u qeuries took %g sec %lu clocks avg over %u runs\n",TIMES, (double)(query_avg)/CLOCKS_PER_SEC, query_avg, RNDS);
+    printf("%u insertions took %g sec %lu clocks over %u runs\n",TIMES, (double)(ins_tot)/CLOCKS_PER_SEC, ins_tot, RNDS);
+    printf("%u qeuries took %g sec %lu clocks over %u runs\n",TIMES, (double)(query_tot)/CLOCKS_PER_SEC, query_tot, RNDS);
 
     return 0;
 }
