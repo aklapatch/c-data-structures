@@ -30,13 +30,20 @@ mem_test: src/mem.h src/mem_test.c
 	$(CC) $(MEM_CFLAGS) src/mem_test.c -o $(OUTDIR)/mem_test
 	$(OUTDIR)/mem_test | tee mem_test.txt
 
-hmap_bench: src/hmap.h src/hmap_test.c src/test_helpers.h
+hmap_cmp: src/hmap.h src/hmap_cmp.c src/test_helpers.h
+	$(CC) $(PROFILE_CFLAGS) stb/stb_ds.h src/hmap_cmp.c -o $(OUTDIR)/hmap_cmp
+	git rev-parse --short HEAD > hmap_cmp.txt
+	cat /proc/cpuinfo | grep name | uniq >> hmap_cmp.txt
+	$(OUTDIR)/hmap_cmp >> hmap_cmp.txt
+	cat hmap_cmp.txt
+	gprof -l -q  $(OUTDIR)/hmap_cmp gmon.out > hmap_cmp_analysis.txt
+
+hmap_bench: src/hmap.h src/hmap_bench.c src/test_helpers.h
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench
 	git rev-parse --short HEAD > hmap_bench.txt
 	cat /proc/cpuinfo | grep name | uniq >> hmap_bench.txt
 	$(OUTDIR)/hmap_bench >> hmap_bench.txt
 	cat hmap_bench.txt
-	gprof -l  $(OUTDIR)/hmap_bench gmon.out > hmap_analysis.txt
-
+	gprof -l -q $(OUTDIR)/hmap_bench gmon.out > hmap_analysis.txt
 
 tests: dynarr_test hmap_test  hash_test
