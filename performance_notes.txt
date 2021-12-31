@@ -7,5 +7,10 @@ Tried splitting the table into 2 partitions, so that you are looking in
 a different section of memory when you find a collision, but that slowed
 things down
 The hash and hash again probing is much faster than quadratic probing
-for insertions From what I can tell. For queries it seems to be a little
+for insertions From what I can tell. For queries quadratic seems to be a little
 better
+Tried pre-computing the hashes needed for probing and that made things
+slower queries got 100% slower. also, STBs default hash function is
+faster than ahash's fallback funcion by a lot margin.
+Storing the hash_fn as a local variable seemed to speed things up
+significantly

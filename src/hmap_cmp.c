@@ -73,6 +73,7 @@ int main(){
 
         query_tot += clock() - start;
 
+        hmfree(hmap);
     }
 
     printf("STB numbers\n");

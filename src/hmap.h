@@ -8,7 +8,8 @@
 // keep as a pow2, a for loop uses this -1 as a mask
 #define GROUP_SIZE (4)
 
-#define PROBE_TRIES (4)
+// with the hmap_bench this hits diminishing returns around 20-40
+#define PROBE_TRIES (5)
 
 #define one_i_to_val_is(main_i, bucket_i, key_i) bucket_i = (main_i)/8; key_i = main_i - (bucket_i*8)
 #define val_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*8 + key_i
@@ -39,6 +40,7 @@ typedef struct hm_info{
     uint8_t err,outside_mem;
 } hm_info;
 
+
 hm_info * hm_info_ptr(void * ptr){
     return (ptr == NULL) ? NULL : (hm_info*)ptr - 1;
 }
@@ -67,6 +69,12 @@ uintptr_t hm_cap(void * ptr){
 uintptr_t hm_num(void * ptr){
     hm_info* tmmp = hm_info_ptr(ptr);
     return (tmmp == NULL) ? 0 : tmmp->num;
+}
+
+// grow around 40% full
+bool should_grow(void *ptr){
+    uintptr_t target_thresh = (hm_cap(ptr)*2)/5;
+    return hm_num(ptr) >= target_thresh;
 }
 
 void hm_set_err(void * ptr, ds_error_e err){
@@ -178,23 +186,23 @@ static uintptr_t key_find_helper(
     // only error out regarding size constraints when looking for an empty slot
     if (!find_empty && hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
-    uintptr_t hash = hm_hash_func(ptr)(&key, sizeof(key));
-
     uintptr_t key_ret_i = UINTPTR_MAX;
-    uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_bucket_is(truncated_hash, bucket_i, key_i);
 
-    uintptr_t val_i; uint8_t val_bit_i;
-    one_i_to_val_is(truncated_hash, val_i, val_bit_i);
+    hash_fn_t hash_fn = hm_hash_func(ptr);
 
     hash_bucket* buckets = hm_bucket_ptr(ptr);
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
-    // needs to be larger than the size of a bucket
-    // chosen somewhat randomly
-    uint8_t probe_try = PROBE_TRIES;
-    for (; probe_try > 0; --probe_try){
+    uint8_t i = 0;
+    uintptr_t val_i; uint8_t val_bit_i;
+    uintptr_t hash;
+    for (; i < PROBE_TRIES; ++i){
+        uintptr_t bucket_i; uint8_t key_i;
+        hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
+        uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+
+        one_i_to_bucket_is(truncated_hash, bucket_i, key_i);
+        one_i_to_val_is(truncated_hash, val_i, val_bit_i);
 
         if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
             uint8_t slot = hm_val_meta_to_open_i(hm_val_meta_ptr(ptr)[val_i]);
@@ -204,46 +212,43 @@ static uintptr_t key_find_helper(
         }
 
         // search the bucket and see if we can insert
-        uint8_t i = key_i, times = GROUP_SIZE;
-        for (; times > 0; --times, i = (i + 1) & (GROUP_SIZE - 1)){
+        uint8_t j = key_i, times = GROUP_SIZE;
+        for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
             // if the key matches, then pass out the index we already have
             if (find_empty){
-                if (buckets[bucket_i].indices[i] == DEX_TS){
-                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
+                if (buckets[bucket_i].indices[j] == DEX_TS){
+                    bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
             } else {
                 // look for the key
-                if (buckets[bucket_i].keys[i] == key && 
-                    buckets[bucket_i].indices[i] != DEX_TS){
-                    if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[i]; }
-                    bucket_is_to_one_i(key_ret_i, bucket_i, i);
+                if (buckets[bucket_i].keys[j] == key && 
+                    buckets[bucket_i].indices[j] != DEX_TS){
+                    if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[j]; }
+                    bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
             }
         }
-        // probe by hashing the hash for another place to look
-        hash = hm_hash_func(ptr)(&hash, sizeof(hash));
-        uintptr_t main_i = truncate_to_cap(ptr, hash);
-        one_i_to_bucket_is(main_i, bucket_i, key_i);
-        one_i_to_val_is(main_i, val_i, val_bit_i);
     }
-    if (probe_try == 0 || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
+    if (i == PROBE_TRIES || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
 
 val_search:
+    ;
     // start looking through everything for a val slot
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
         for (; *dex_slot_out == UINTPTR_MAX;){
+            hash = hash_fn(&hash, sizeof(hash));
+            uintptr_t main_i = truncate_to_cap(ptr, hash);
+            one_i_to_val_is(main_i, val_i, val_bit_i);
+
             uint8_t val_meta = hm_val_meta_ptr(ptr)[val_i];
             uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
                 val_is_to_one_i(*dex_slot_out, val_i, slot);
                 break;
             }
-            hash = hm_hash_func(ptr)(&hash, sizeof(hash));
-            uintptr_t main_i = truncate_to_cap(ptr, hash);
-            one_i_to_val_is(main_i, val_i, val_bit_i);
         }
     }
 
@@ -421,14 +426,16 @@ uintptr_t hm_raw_insert_key(
 
 #define hm_set(ptr, k, v)\
     do{\
-        for (uint8_t __hm_grow_tries = 2; __hm_grow_tries > 0; --__hm_grow_tries){\
-            hm_info_ptr(ptr)->tmp_val_i = hm_raw_insert_key(ptr, k);\
-            if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
-                ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
-                hm_set_err(ptr, ds_success); \
-                break;\
-            } else { \
-                hm_set_err(ptr, ds_not_found); \
+        for (uint8_t __hm_grow_tries = 3; __hm_grow_tries > 0; --__hm_grow_tries){\
+            if (!should_grow(ptr)){ \
+                hm_info_ptr(ptr)->tmp_val_i = hm_raw_insert_key(ptr, k);\
+                if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
+                    ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
+                    hm_set_err(ptr, ds_success); \
+                    break;\
+                } else { \
+                    hm_set_err(ptr, ds_not_found); \
+                } \
             } \
             hm_realloc(ptr, hm_cap(ptr)+1);\
         }\
