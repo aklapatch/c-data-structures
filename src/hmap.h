@@ -454,9 +454,9 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
 
 #define hm_get(ptr, key, val_to_set)\
     do {\
-        uintptr_t __val_i = hm_find_val_i(ptr, key);\
-        if (__val_i != UINTPTR_MAX){\
-            val_to_set = ptr[__val_i];\
+        hm_info_ptr(ptr)->tmp_val_i = hm_find_val_i(ptr, key);\
+        if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
+            val_to_set = ptr[hm_info_ptr(ptr)->tmp_val_i];\
         }\
     } while(0)
 
