@@ -6,7 +6,8 @@
 #define DEX_TS ((uintptr_t)UINT32_MAX)
 
 // keep as a pow2, a for loop uses this -1 as a mask
-#define GROUP_SIZE (4)
+// This needs to stay 8 to correspond to 8 bits per block
+#define GROUP_SIZE (8)
 
 // with the hmap_bench this hits diminishing returns around 20-40
 #define PROBE_TRIES (5)
@@ -39,7 +40,6 @@ typedef struct hm_info{
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
 } hm_info;
-
 
 hm_info * hm_info_ptr(void * ptr){
     return (ptr == NULL) ? NULL : (hm_info*)ptr - 1;
@@ -201,25 +201,32 @@ static uintptr_t key_find_helper(
     uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
     uintptr_t cap = hm_cap(ptr);
     for (; i < PROBE_TRIES; ++i){
-        uintptr_t bucket_i; uint8_t key_i;
         hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
         truncated_hashes[i] = truncate_to_cap(ptr, hash);
-
+        uintptr_t bucket_i; uint8_t key_i;
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
 
-        // search the bucket and see if we can insert
-        uint8_t j = key_i, times = GROUP_SIZE;
-        for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
-            // if the key matches, then pass out the index we already have
-            if (find_empty){
+        if (find_empty){
+            // look through the slot meta to find an empty slot.
+            // We don't need to look through every slot in the bucket since
+            // the slot_meta array is not a bucket
+            // search the bucket and see if we can insert
+            uint8_t j = key_i, times = GROUP_SIZE;
+            for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
+                // look for the key
                 if (buckets[bucket_i].indices[j] == DEX_TS){
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
-            } else {
+            }
+        } else {
+            one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
+            // search the bucket and see if we can insert
+            uint8_t j = key_i, times = GROUP_SIZE;
+            for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
                 // look for the key
                 if (buckets[bucket_i].keys[j] == key && 
-                    buckets[bucket_i].indices[j] != DEX_TS){
+                        buckets[bucket_i].indices[j] != DEX_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
@@ -275,6 +282,8 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     buckets[bucket_i].indices[key_i] = dex;
     buckets[bucket_i].keys[key_i] = key;
+
+    bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex, true);
 
     return 0;
 }
@@ -504,6 +513,7 @@ void hm_del(void *ptr, uintptr_t key){
 
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
+    bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex, false);
     bit_set_or_clear(hm_val_meta_ptr(ptr), buckets[bucket_i].indices[key_i], false);
 
     buckets[bucket_i].indices[key_i] = DEX_TS;
