@@ -229,7 +229,7 @@ static uintptr_t key_find_helper(
                         buckets[bucket_i].indices[j] != DEX_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
-                    goto val_search;
+                    return key_ret_i;
                 }
             }
         }
