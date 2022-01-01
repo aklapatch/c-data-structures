@@ -17,3 +17,7 @@ significantly
 Tried moving the val searching out of the key search main loop and that
 didn't slow things down to much. I had to add a way to store the
 truncated hashes locally though.
+I could try making whether a key slot is taken or not be in another array.
+That way a byte could represent 8 slots, and you could check 64*8 slots
+per cache line. Searching could use that memor too, but I'm not sure if
+it would help or not.

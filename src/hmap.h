@@ -34,8 +34,8 @@ typedef struct hm_info{
     realloc_fn_t realloc_fn;
     // holds the metadata for the hash table.
     hash_bucket* buckets;
-    uint8_t *val_metas;
-    // tmp_val_i is used to set the value array in the macro
+    uint8_t *val_metas, *slot_meta;
+    // tmp_val_i is used to set the value array in the macros
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
 } hm_info;
@@ -47,6 +47,10 @@ hm_info * hm_info_ptr(void * ptr){
 
 uint8_t *hm_val_meta_ptr(void * ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
+}
+
+uint8_t *hm_slot_meta_ptr(void * ptr){
+    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->slot_meta;
 }
 
 hash_fn_t hm_hash_func(void *ptr){
@@ -193,8 +197,7 @@ static uintptr_t key_find_helper(
     hash_bucket* buckets = hm_bucket_ptr(ptr);
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
-    uint8_t i = 0, *val_metas = hm_val_meta_ptr(ptr);
-    uintptr_t val_i; uint8_t val_bit_i;
+    uint8_t i = 0;
     uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
     uintptr_t cap = hm_cap(ptr);
     for (; i < PROBE_TRIES; ++i){
@@ -231,6 +234,7 @@ val_search:
     // start looking through everything for a val slot
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
+        uint8_t * val_metas = hm_val_meta_ptr(ptr);
         for (uint8_t j = 0; *dex_slot_out == UINTPTR_MAX; ++j){
             // use the stored hash if we have onw
             uintptr_t main_i;
@@ -240,10 +244,10 @@ val_search:
                 hash = hash_fn(&hash, sizeof(hash));
                 main_i = truncate_to_cap(ptr, hash);
             }
+            uintptr_t val_i; uint8_t val_bit_i;
             one_i_to_val_is(main_i, val_i, val_bit_i);
 
-            uint8_t val_meta = val_metas[val_i];
-            uint8_t slot = hm_val_meta_to_open_i(val_meta);
+            uint8_t slot = hm_val_meta_to_open_i(val_metas[val_i]);
             if (slot != UINT8_MAX){
                 val_is_to_one_i(*dex_slot_out, val_i, slot);
                 break;
@@ -311,9 +315,21 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
 
     inf_ptr->val_metas = new_val_metas;
 
+    // allocate slot_meta should be same size as val_metas
+    uint8_t *old_slot_meta = (base_ptr == NULL) ? NULL : inf_ptr->slot_meta;
+    uint8_t *new_slot_meta = realloc_fn(old_slot_meta, num_val_metas);
+    if (new_slot_meta == NULL){
+        ++inf_ptr;
+        hm_set_err(inf_ptr, ds_alloc_fail);
+        return inf_ptr;
+    }
+
+    inf_ptr->slot_meta = new_slot_meta;
+
     // zero out new val_meta portion to 
     for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
         inf_ptr->val_metas[i] = 0;
+        inf_ptr->slot_meta[i] = 0;
     }
 
     // old_bucket_ptr is not necessary if allocating from scratch
@@ -412,13 +428,13 @@ uintptr_t hm_raw_insert_key(
     // only increment the num if we are not replacing a key
     if (buckets[bucket_i].indices[key_i] == DEX_TS){
         hm_info_ptr(ptr)->num++;
+        // set that the slot is taken
+        bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex_out, true);
     }
     buckets[bucket_i].keys[key_i] = key;
     buckets[bucket_i].indices[key_i] = val_dex;
 
     bit_set_or_clear(hm_val_meta_ptr(ptr), val_dex, true);
-
-    hm_info_ptr(ptr)->tmp_val_i = val_dex;
 
     return val_dex;
 }
@@ -466,6 +482,10 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
         }\
     } while(0)
 
+// TODO: STB just puts the newest element at the end of the array and memmoves 
+// old elements over the removed one. Implement that so we can get rid of val_meta
+// We don't need to really worry about it right now since queries are about as
+// fast as STB's
 void hm_del(void *ptr, uintptr_t key){
 
     uintptr_t val_dex, key_dex = key_find_helper(
