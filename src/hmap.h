@@ -195,22 +195,14 @@ static uintptr_t key_find_helper(
 
     uint8_t i = 0, *val_metas = hm_val_meta_ptr(ptr);
     uintptr_t val_i; uint8_t val_bit_i;
-    uintptr_t hash;
+    uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
     uintptr_t cap = hm_cap(ptr);
     for (; i < PROBE_TRIES; ++i){
         uintptr_t bucket_i; uint8_t key_i;
         hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
-        uintptr_t truncated_hash = truncate_to_cap(ptr, hash);
+        truncated_hashes[i] = truncate_to_cap(ptr, hash);
 
-        one_i_to_bucket_is(truncated_hash, bucket_i, key_i);
-        one_i_to_val_is(truncated_hash, val_i, val_bit_i);
-
-        if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
-            uint8_t slot = hm_val_meta_to_open_i(val_metas[val_i]);
-            if (slot != UINT8_MAX){
-                val_is_to_one_i(*dex_slot_out, val_i, slot);
-            }
-        }
+        one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
 
         // search the bucket and see if we can insert
         uint8_t j = key_i, times = GROUP_SIZE;
@@ -239,9 +231,15 @@ val_search:
     // start looking through everything for a val slot
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
-        for (; *dex_slot_out == UINTPTR_MAX;){
-            hash = hash_fn(&hash, sizeof(hash));
-            uintptr_t main_i = truncate_to_cap(ptr, hash);
+        for (uint8_t j = 0; *dex_slot_out == UINTPTR_MAX; ++j){
+            // use the stored hash if we have onw
+            uintptr_t main_i;
+            if (j <= i){
+                main_i = truncated_hashes[j]; 
+            } else {
+                hash = hash_fn(&hash, sizeof(hash));
+                main_i = truncate_to_cap(ptr, hash);
+            }
             one_i_to_val_is(main_i, val_i, val_bit_i);
 
             uint8_t val_meta = val_metas[val_i];

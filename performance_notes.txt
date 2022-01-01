@@ -14,3 +14,6 @@ slower queries got 100% slower. also, STBs default hash function is
 faster than ahash's fallback funcion by a lot margin.
 Storing the hash_fn as a local variable seemed to speed things up
 significantly
+Tried moving the val searching out of the key search main loop and that
+didn't slow things down to much. I had to add a way to store the
+truncated hashes locally though.
