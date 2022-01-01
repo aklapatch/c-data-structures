@@ -193,9 +193,10 @@ static uintptr_t key_find_helper(
     hash_bucket* buckets = hm_bucket_ptr(ptr);
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
-    uint8_t i = 0;
+    uint8_t i = 0, *val_metas = hm_val_meta_ptr(ptr);
     uintptr_t val_i; uint8_t val_bit_i;
     uintptr_t hash;
+    uintptr_t cap = hm_cap(ptr);
     for (; i < PROBE_TRIES; ++i){
         uintptr_t bucket_i; uint8_t key_i;
         hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
@@ -205,7 +206,7 @@ static uintptr_t key_find_helper(
         one_i_to_val_is(truncated_hash, val_i, val_bit_i);
 
         if (dex_slot_out != NULL && *dex_slot_out == UINTPTR_MAX && find_empty){
-            uint8_t slot = hm_val_meta_to_open_i(hm_val_meta_ptr(ptr)[val_i]);
+            uint8_t slot = hm_val_meta_to_open_i(val_metas[val_i]);
             if (slot != UINT8_MAX){
                 val_is_to_one_i(*dex_slot_out, val_i, slot);
             }
@@ -243,7 +244,7 @@ val_search:
             uintptr_t main_i = truncate_to_cap(ptr, hash);
             one_i_to_val_is(main_i, val_i, val_bit_i);
 
-            uint8_t val_meta = hm_val_meta_ptr(ptr)[val_i];
+            uint8_t val_meta = val_metas[val_i];
             uint8_t slot = hm_val_meta_to_open_i(val_meta);
             if (slot != UINT8_MAX){
                 val_is_to_one_i(*dex_slot_out, val_i, slot);
