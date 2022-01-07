@@ -9,8 +9,6 @@
 // This needs to stay 8 to correspond to 8 bits per block
 #define GROUP_SIZE (8)
 
-#define PROBE_STEP (GROUP_SIZE)
-
 // with the hmap_bench this hits diminishing returns around 20-40
 #define PROBE_TRIES (5)
 
@@ -202,7 +200,6 @@ static uintptr_t key_find_helper(
     uint8_t i = 0;
     uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
     uintptr_t cap = hm_cap(ptr);
-    uint8_t *slot_meta = hm_slot_meta_ptr(ptr);
     for (; i < PROBE_TRIES; ++i){
         hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
         truncated_hashes[i] = truncate_to_cap(ptr, hash);
@@ -210,10 +207,17 @@ static uintptr_t key_find_helper(
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
 
         if (find_empty){
-            uint8_t slot = hm_val_meta_to_open_i(slot_meta[bucket_i]);
-            if (slot != UINT8_MAX){
-                bucket_is_to_one_i(key_ret_i, bucket_i, slot);
-                goto val_search;
+            // look through the slot meta to find an empty slot.
+            // We don't need to look through every slot in the bucket since
+            // the slot_meta array is not a bucket
+            // search the bucket and see if we can insert
+            uint8_t j = key_i, times = GROUP_SIZE;
+            for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
+                // look for the key
+                if (buckets[bucket_i].indices[j] == DEX_TS){
+                    bucket_is_to_one_i(key_ret_i, bucket_i, j);
+                    goto val_search;
+                }
             }
         } else {
             one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
@@ -380,9 +384,6 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
                 // hash the key here and re-insert it into the new array.
                 uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
                 uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
-
-                // clear the meta where the old key was stored
-                bit_set_or_clear(hm_info_ptr(inf_ptr)->slot_meta, bucket_i*GROUP_SIZE + i, false);
 
                 uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
                 // upon error, revert the indices and return a failure
