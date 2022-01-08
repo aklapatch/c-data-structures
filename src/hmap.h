@@ -205,29 +205,28 @@ static uintptr_t key_find_helper(
         truncated_hashes[i] = truncate_to_cap(ptr, hash);
         uintptr_t bucket_i; uint8_t key_i;
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
+        hash_bucket *bucket = buckets + bucket_i;
 
+        uint8_t j = key_i, times = GROUP_SIZE;
         if (find_empty){
             // look through the slot meta to find an empty slot.
             // We don't need to look through every slot in the bucket since
             // the slot_meta array is not a bucket
             // search the bucket and see if we can insert
-            uint8_t j = key_i, times = GROUP_SIZE;
             for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
                 // look for the key
-                if (buckets[bucket_i].indices[j] == DEX_TS){
+                if (bucket->indices[j] == DEX_TS){
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
             }
         } else {
-            one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
             // search the bucket and see if we can insert
-            uint8_t j = key_i, times = GROUP_SIZE;
             for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
                 // look for the key
-                if (buckets[bucket_i].keys[j] == key && 
-                        buckets[bucket_i].indices[j] != DEX_TS){
-                    if (dex_slot_out != NULL) { *dex_slot_out = buckets[bucket_i].indices[j]; }
+                if (bucket->keys[j] == key && 
+                    bucket->indices[j] != DEX_TS){
+                    if (dex_slot_out != NULL) { *dex_slot_out = bucket->indices[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     return key_ret_i;
                 }
