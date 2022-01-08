@@ -24,3 +24,4 @@ it would help or not.
 
 Tried having searches search by bit, and that does not seem to help
 Tried adding an another array of bits that has one bit per key slot taken, and that did not help.
+Tried seprating the loops that search the lower and upper halves of the buckets and that did not help
