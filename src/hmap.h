@@ -199,10 +199,10 @@ static uintptr_t key_find_helper(
 
     uint8_t i = 0;
     uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
-    uintptr_t cap = hm_cap(ptr);
+    uintptr_t cap_mask = hm_cap(ptr) - 1;
     for (; i < PROBE_TRIES; ++i){
         hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
-        truncated_hashes[i] = truncate_to_cap(ptr, hash);
+        truncated_hashes[i] = hash & cap_mask;
         uintptr_t bucket_i; uint8_t key_i;
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
         hash_bucket *bucket = buckets + bucket_i;

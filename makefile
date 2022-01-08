@@ -31,7 +31,7 @@ mem_test: src/mem.h src/mem_test.c
 	$(OUTDIR)/mem_test | tee mem_test.txt
 
 hmap_cmp: src/hmap.h src/hmap_cmp.c src/test_helpers.h
-	rm -f *.gcda *.gcno
+	rm -f *.out
 	$(CC) $(PROFILE_CFLAGS) stb/stb_ds.h src/hmap_cmp.c -o $(OUTDIR)/hmap_cmp
 	git rev-parse --short HEAD > hmap_cmp.txt
 	cat /proc/cpuinfo | grep name | uniq >> hmap_cmp.txt
