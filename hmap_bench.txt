@@ -1,4 +1,4 @@
-f1222b0
-model name	: Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz
-196605 insertions took 2.05001 sec 2050013 clocks over 40 runs
-196605 qeuries took 1.01001 sec 1010008 clocks over 40 runs
+b218660
+model name	: Intel(R) Core(TM) i3-6100U CPU @ 2.30GHz
+196605 insertions took 1.70717 sec 1707166 clocks over 40 runs
+196605 qeuries took 0.58412 sec 584120 clocks over 40 runs

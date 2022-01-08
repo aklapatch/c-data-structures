@@ -23,6 +23,7 @@
 // define the dict as it's own thing, separate from the hmap, it has different needs.
 
 typedef struct {
+    uintptr_t hashes[GROUP_SIZE];
     uintptr_t keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
 } hash_bucket;
@@ -203,6 +204,8 @@ static uintptr_t key_find_helper(
         uintptr_t bucket_i; uint8_t key_i;
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
         hash_bucket *bucket = buckets + bucket_i;
+        uintptr_t *keys = bucket->keys;
+        uint32_t *indices = bucket->indices;
 
         uint8_t j = key_i, times = GROUP_SIZE, grp_mask = GROUP_SIZE - 1;
         for (; times > 0; --times, j = (j + 1) & grp_mask){
@@ -212,16 +215,16 @@ static uintptr_t key_find_helper(
                 // the slot_meta array is not a bucket
                 // search the bucket and see if we can insert
                 // look for the key
-                if (bucket->indices[j] == DEX_TS){
+                if (indices[j] == DEX_TS){
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
             } else {
                 // search the bucket and see if we can insert
                 // look for the key
-                if (bucket->keys[j] == key && 
-                        bucket->indices[j] != DEX_TS){
-                    if (dex_slot_out != NULL) { *dex_slot_out = bucket->indices[j]; }
+                if (keys[j] == key && 
+                    indices[j] != DEX_TS){
+                    if (dex_slot_out != NULL) { *dex_slot_out = indices[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     return key_ret_i;
                 }
