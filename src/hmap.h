@@ -35,7 +35,7 @@ typedef struct hm_info{
     realloc_fn_t realloc_fn;
     // holds the metadata for the hash table.
     hash_bucket* buckets;
-    uint8_t *val_metas, *slot_meta;
+    uint8_t *val_metas;
     // tmp_val_i is used to set the value array in the macros
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
@@ -49,9 +49,6 @@ uint8_t *hm_val_meta_ptr(void * ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
 }
 
-uint8_t *hm_slot_meta_ptr(void * ptr){
-    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->slot_meta;
-}
 
 hash_fn_t hm_hash_func(void *ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
@@ -207,25 +204,23 @@ static uintptr_t key_find_helper(
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
         hash_bucket *bucket = buckets + bucket_i;
 
-        uint8_t j = key_i, times = GROUP_SIZE;
-        if (find_empty){
-            // look through the slot meta to find an empty slot.
-            // We don't need to look through every slot in the bucket since
-            // the slot_meta array is not a bucket
-            // search the bucket and see if we can insert
-            for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
+        uint8_t j = key_i, times = GROUP_SIZE, grp_mask = GROUP_SIZE - 1;
+        for (; times > 0; --times, j = (j + 1) & grp_mask){
+            if (find_empty){
+                // look through the slot meta to find an empty slot.
+                // We don't need to look through every slot in the bucket since
+                // the slot_meta array is not a bucket
+                // search the bucket and see if we can insert
                 // look for the key
                 if (bucket->indices[j] == DEX_TS){
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
-            }
-        } else {
-            // search the bucket and see if we can insert
-            for (; times > 0; --times, j = (j + 1) & (GROUP_SIZE - 1)){
+            } else {
+                // search the bucket and see if we can insert
                 // look for the key
                 if (bucket->keys[j] == key && 
-                    bucket->indices[j] != DEX_TS){
+                        bucket->indices[j] != DEX_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = bucket->indices[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     return key_ret_i;
@@ -282,8 +277,6 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
     buckets[bucket_i].indices[key_i] = dex;
     buckets[bucket_i].keys[key_i] = key;
 
-    bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex, true);
-
     return 0;
 }
 
@@ -323,21 +316,9 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
 
     inf_ptr->val_metas = new_val_metas;
 
-    // allocate slot_meta should be same size as val_metas
-    uint8_t *old_slot_meta = (base_ptr == NULL) ? NULL : inf_ptr->slot_meta;
-    uint8_t *new_slot_meta = realloc_fn(old_slot_meta, num_val_metas);
-    if (new_slot_meta == NULL){
-        ++inf_ptr;
-        hm_set_err(inf_ptr, ds_alloc_fail);
-        return inf_ptr;
-    }
-
-    inf_ptr->slot_meta = new_slot_meta;
-
     // zero out new val_meta portion to 
     for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
         inf_ptr->val_metas[i] = 0;
-        inf_ptr->slot_meta[i] = 0;
     }
 
     // old_bucket_ptr is not necessary if allocating from scratch
@@ -437,7 +418,6 @@ uintptr_t hm_raw_insert_key(
     if (buckets[bucket_i].indices[key_i] == DEX_TS){
         hm_info_ptr(ptr)->num++;
         // set that the slot is taken
-        bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex_out, true);
     }
     buckets[bucket_i].keys[key_i] = key;
     buckets[bucket_i].indices[key_i] = val_dex;
@@ -512,7 +492,6 @@ void hm_del(void *ptr, uintptr_t key){
 
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
-    bit_set_or_clear(hm_slot_meta_ptr(ptr), key_dex, false);
     bit_set_or_clear(hm_val_meta_ptr(ptr), buckets[bucket_i].indices[key_i], false);
 
     buckets[bucket_i].indices[key_i] = DEX_TS;

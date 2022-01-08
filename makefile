@@ -1,6 +1,6 @@
 DBG_CFLAGS=-g3 -Wall -Wextra -pg
 OPT_CFLAGS=-Wall -Wextra -O2
-PROFILE_CFLAGS=-pg -Wall -Wextra -O2 -g
+PROFILE_CFLAGS=-Wall -Wextra -O0 -g3
 MEM_CFLAGS=-Wall -Wextra -O0 -g3
 OUTDIR=./build/
 
@@ -40,11 +40,12 @@ hmap_cmp: src/hmap.h src/hmap_cmp.c src/test_helpers.h
 	gprof -l $(OUTDIR)/hmap_cmp gmon.out > hmap_cmp_analysis.txt
 
 hmap_bench: src/hmap.h src/hmap_bench.c src/test_helpers.h
-	rm -f *.gcda *.gcno
+	rm -f gmon.out
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench
 	git rev-parse --short HEAD > hmap_bench.txt
 	cat /proc/cpuinfo | grep name | uniq >> hmap_bench.txt
 	$(OUTDIR)/hmap_bench >> hmap_bench.txt
 	cat hmap_bench.txt
+	gprof -l $(OUTDIR)/hmap_bench gmon.out > hmap_analysis.txt
 
 tests: dynarr_test hmap_test  hash_test
