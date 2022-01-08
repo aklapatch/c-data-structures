@@ -5,6 +5,8 @@
 // tombstone (empty) marker
 #define DEX_TS ((uintptr_t)UINT32_MAX)
 
+#define PROBE_STEP (GROUP_SIZE)
+
 // keep as a pow2, a for loop uses this -1 as a mask
 // This needs to stay 8 to correspond to 8 bits per block
 #define GROUP_SIZE (8)
@@ -195,11 +197,13 @@ static uintptr_t key_find_helper(
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
     uint8_t i = 0;
-    uintptr_t hash, truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
+    uintptr_t hash = hash_fn(&key, sizeof(key)), truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
+    uintptr_t step = PROBE_STEP;
     uintptr_t cap_mask = hm_cap(ptr) - 1;
     for (; i < PROBE_TRIES; ++i){
-        hash = hash_fn(i == 0 ? &key : &hash, sizeof(uintptr_t));
+        // use hash first time, quadratic probe every other time
         truncated_hashes[i] = hash & cap_mask;
+
         uintptr_t bucket_i; uint8_t key_i;
         one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
         hash_bucket *bucket = buckets + bucket_i;
@@ -229,6 +233,8 @@ static uintptr_t key_find_helper(
                 }
             }
         }
+        hash = truncated_hashes[i] + step;
+        step += PROBE_STEP;
     }
     if (i == PROBE_TRIES || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
 
@@ -244,9 +250,11 @@ val_search:
             if (j <= i){
                 main_i = truncated_hashes[j]; 
             } else {
-                hash = hash_fn(&hash, sizeof(hash));
-                main_i = truncate_to_cap(ptr, hash);
+                hash += step;
+                main_i = hash & cap_mask;
+                step += PROBE_STEP;
             }
+
             uintptr_t val_i; uint8_t val_bit_i;
             one_i_to_val_is(main_i, val_i, val_bit_i);
 
