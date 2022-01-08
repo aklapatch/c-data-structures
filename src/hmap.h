@@ -23,7 +23,6 @@
 // define the dict as it's own thing, separate from the hmap, it has different needs.
 
 typedef struct {
-    uintptr_t hashes[GROUP_SIZE];
     uintptr_t keys[GROUP_SIZE];
     uint32_t indices[GROUP_SIZE]; 
 } hash_bucket;
