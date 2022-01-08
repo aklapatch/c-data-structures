@@ -8,7 +8,6 @@
 #define PROBE_STEP (GROUP_SIZE)
 
 // keep as a pow2, a for loop uses this -1 as a mask
-// This needs to stay 8 to correspond to 8 bits per block
 #define GROUP_SIZE (8)
 
 // with the hmap_bench this hits diminishing returns around 20-40
