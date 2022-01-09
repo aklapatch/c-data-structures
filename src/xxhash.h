@@ -55,7 +55,7 @@ uintptr_t xxhash_buf(void *data, size_t data_len){
         result = rot_left(result + *block * primes[2], ptr64 ? 31 : 17);
     }
 
-    uint8_t *byte_data = (uint8_t*)block, byte_end = byte_data + tmp_len;
+    uint8_t *byte_data = (uint8_t*)block, *byte_end = byte_data + tmp_len;
     for (; byte_data < byte_end; ++byte_data){
         result = rot_left(result + *byte_data * primes[4], 11);
     }
