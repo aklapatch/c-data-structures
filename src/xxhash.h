@@ -28,35 +28,35 @@ uintptr_t xxhash_buf(void *data, size_t data_len){
     uint8_t shift_amt = ptr64 ? 13 : 31;
     uintptr_t *block = (uintptr_t*)data;
     size_t tmp_len = data_len;
-    for (; tmp_len >= sizeof(state); tmp_len -= sizeof(state),block += state_num){
-        for (uint8_t i = 0; i < sizeof(state)/sizeof(state[0]); ++i){
-            state[i] = rot_left(state[i] + block[i] * primes[1], shift_amt) * primes[0];
-        }
-    }
 
     uintptr_t result = data_len;
     if (data_len >= sizeof(state)){
+        for (; tmp_len >= sizeof(state); tmp_len -= sizeof(state),block += state_num){
+            for (uint8_t i = 0; i < state_num; ++i){
+                state[i] = rot_left(state[i] + block[i] * primes[1], shift_amt) * primes[0];
+            }
+        }
+
         uint8_t shifts[] = { 1, 7, 12, 18 };
         for (uint8_t i = 0; i < state_num; ++i){
             result += rot_left(state[i], shifts[i]);
         }
-        if (ptr64) {
-            for(uint8_t i = 0; i < state_num; ++i){
-                uintptr_t tmp = rot_left(state[i] * primes[1], 31) * primes[0];
-                result = (result ^ tmp) * primes[0] + primes[3];
-            }
+        for(uint8_t i = 0; ptr64 && i < state_num; ++i){
+            uintptr_t tmp = rot_left(state[i] * primes[1], 31) * primes[0];
+            result = (result ^ tmp) * primes[0] + primes[3];
         }
     } else {
         result += state[2] + primes[4];
     }
 
     // hash one uintptr_t at a time until we get to byte interval sizes
-    for(; tmp_len > sizeof(uintptr_t); tmp_len -= sizeof(uintptr_t), ++block){
+    uintptr_t *block_end = block + (tmp_len/sizeof(uintptr_t));
+    for(; block < block_end; tmp_len -= sizeof(uintptr_t), ++block){
         result = rot_left(result + *block * primes[2], ptr64 ? 31 : 17);
     }
 
-    uint8_t *byte_data = (uint8_t*)block;
-    for (; tmp_len > 0; --tmp_len, ++byte_data){
+    uint8_t *byte_data = (uint8_t*)block, byte_end = byte_data + tmp_len;
+    for (; byte_data < byte_end; ++byte_data){
         result = rot_left(result + *byte_data * primes[4], 11);
     }
 
