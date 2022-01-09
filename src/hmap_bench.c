@@ -1,5 +1,6 @@
 #include"hmap.h"
 #include "ahash.h"
+#include "xxhash.h"
 #include "test_helpers.h"
 #include <stdlib.h>
 #include <time.h>

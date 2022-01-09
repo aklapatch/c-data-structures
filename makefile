@@ -41,7 +41,6 @@ hmap_cmp: src/hmap.h src/hmap_cmp.c src/test_helpers.h
 	cat /proc/cpuinfo | grep name | uniq >> hmap_cmp.txt
 	$(OUTDIR)/hmap_cmp >> hmap_cmp.txt
 	cat hmap_cmp.txt
-	gprof -l $(OUTDIR)/hmap_cmp gmon.out > hmap_cmp_analysis.txt
 
 hmap_bench: src/hmap.h src/hmap_bench.c src/test_helpers.h
 	rm -f gmon.out
