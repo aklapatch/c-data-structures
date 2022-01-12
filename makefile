@@ -49,6 +49,5 @@ hmap_bench: src/hmap.h src/hmap_bench.c src/test_helpers.h
 	cat /proc/cpuinfo | grep name | uniq >> hmap_bench.txt
 	$(OUTDIR)/hmap_bench >> hmap_bench.txt
 	cat hmap_bench.txt
-	gprof -l $(OUTDIR)/hmap_bench gmon.out > hmap_analysis.txt
 
 tests: dynarr_test hmap_test  hash_test
