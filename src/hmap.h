@@ -3,7 +3,7 @@
 #include "bit_setting.h"
 
 // tombstone (empty) marker
-#define DEX_TS ((uintptr_t)UINT32_MAX)
+#define DEX_TS (UINT32_MAX)
 
 #define PROBE_STEP (GROUP_SIZE)
 
@@ -271,7 +271,7 @@ val_search:
 }
 
 // basically an insert, but we don't need to look for a dex slot
-static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uintptr_t dex){
+static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
 
     if (hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
@@ -355,7 +355,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
 
     // set the new meta to empty
     for (uintptr_t i = 0; i < num_buckets; ++i){
-        for (uint16_t j = 0; j < GROUP_SIZE; ++j){
+        for (uint8_t j = 0; j < GROUP_SIZE; ++j){
             inf_ptr->buckets[i].indices[j] = DEX_TS;
         }
     }
@@ -367,26 +367,32 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     }
 
     // TODO re-insert keys, but leave the indexes since they're okay
-    uintptr_t num_items = hm_num(inf_ptr);
+    uintptr_t num_items = hm_num(inf_ptr), key_buf[GROUP_SIZE];
     // search the old key structure for keys
+    uint32_t dex_buf[GROUP_SIZE]; 
+    uint8_t key_i = 0;
     for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
             if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
-                // hash the key here and re-insert it into the new array.
-                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
-                uintptr_t dex = old_bucket_ptr[bucket_i].indices[i];
-
-                uintptr_t ret = insert_key_and_dex(inf_ptr, key, dex);
-                // upon error, revert the indices and return a failure
-                if (ret == UINTPTR_MAX){
-                    hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
-                    // free the old memory
-                    (void)realloc_fn(bucket_ptr, 0);
-                    goto done;
-                } 
+                // fill up the buffer
+                key_buf[key_i] = old_bucket_ptr[bucket_i].keys[i];
+                dex_buf[key_i] = old_bucket_ptr[bucket_i].indices[i]; 
+                ++key_i;
                 --num_items;
-                if (num_items == 0){
-                    goto free_old_bucket;
+                if (key_i == GROUP_SIZE || num_items == 0){
+                    for (uint8_t j = 0; j < key_i; ++j){
+                        uintptr_t ret = insert_key_and_dex(inf_ptr, key_buf[j], dex_buf[j]);
+                        if (ret == UINTPTR_MAX){
+                            hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
+                            // free the old memory
+                            (void)realloc_fn(bucket_ptr, 0);
+                            goto done;
+                        } 
+                    }
+                    if (num_items == 0){
+                        goto free_old_bucket;
+                    }
+                    key_i = 0;
                 }
             }
         }
