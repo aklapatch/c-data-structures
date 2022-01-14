@@ -35,3 +35,13 @@ fallback function.
 clock to do things
 Actually, after adding keeping the hashing from getting optimized out,
 xxhash seems a lot faster.
+
+For ant hash:
+- for some reason, switching the hash bench to not use an array of
+  hashes makes it a lot faster. Probably better cache behavior, but I'm
+  not sure.
+- Making the hash test hash the hash seems to work the best for
+  comparison testing. The compiler does not eliminate the other rounds I
+  guess
+
+Decided to make ant_hash hash a single uintptr_t, since we don't really need to hash anything else for the key hash table. The dict will be a different story

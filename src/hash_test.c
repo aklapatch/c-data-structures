@@ -1,8 +1,24 @@
 #include "ahash.h"
 #include "xxhash.h"
+#include "ant_hash.h"
 #include <stdio.h>  
 #include <time.h>
-#define ROUNDS (1*UINT16_MAX)
+#include <stdbool.h>
+#define ROUNDS (2*UINT16_MAX)
+
+bool check_hashes(uint64_t *in, uint64_t num){
+    for (uint64_t i = 0; i < num; ++i){
+        //compare different matches and see if one was found
+        // start at i + 1 since the ith element has already been compared against the jth element
+        for (uint64_t j = i + 1; j < num; ++j){
+            if (j != i && in[i] == in[j]){
+                printf("Collision found! %lx i = %lu j = %lu\n", in[i], i, j);
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 int main(){
     uint64_t hashes[ROUNDS] = {0};
@@ -15,14 +31,9 @@ int main(){
     }
     time = clock() - time;
     printf("%u 8 bytes hashes took %g sec %lu clocks\n", ROUNDS , (double)(time)/CLOCKS_PER_SEC, time);
-    for (uint64_t i = 0; i < ROUNDS; ++i){
-        //compare different matches and see if one was found
-        for (uint64_t j = 0; j < ROUNDS; ++j){
-            if (j != i && hashes[i] == hashes[j]){
-                printf("Collision found! %lx i = %lu j = %lu\n", hashes[i], i,j);
-                return 1;
-            }
-        }
+
+    if (check_hashes(hashes, ROUNDS)){
+        return 1;
     }
 
     printf("Starting xxhash test\n");
@@ -34,14 +45,21 @@ int main(){
     time = clock() - time;
     printf("%u 8 bytes hashes took %g sec %lu clocks\n", ROUNDS , (double)(time)/CLOCKS_PER_SEC, time);
 
+    if (check_hashes(hashes, ROUNDS)){
+        return 1;
+    }
+
+    printf("Starting ant_hash test\n");
+
+    time = clock();
     for (uint64_t i = 0; i < ROUNDS; ++i){
-        //compare different matches and see if one was found
-        for (uint64_t j = 0; j < ROUNDS; ++j){
-            if (j != i && hashes[i] == hashes[j]){
-                printf("Collision found! %lx i = %lu j = %lu\n", hashes[i], i,j);
-                return 1;
-            }
-        }
+        hashes[i] = ant_hash(i);
+    }
+    time = clock() - time;
+    printf("%u 8 bytes hashes took %g sec %lu clocks\n", ROUNDS , (double)(time)/CLOCKS_PER_SEC, time);
+
+    if (check_hashes(hashes, ROUNDS)){
+        return 1;
     }
 
     return 0;
