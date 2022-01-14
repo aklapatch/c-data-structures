@@ -10,6 +10,8 @@
 // keep as a pow2, a for loop uses this -1 as a mask
 #define GROUP_SIZE (8)
 
+#define GROUP_MASK (GROUP_SIZE - 1)
+
 // with the hmap_bench this hits diminishing returns around 20-40
 #define PROBE_TRIES (5)
 
@@ -29,7 +31,7 @@ typedef struct {
 } hash_bucket;
 
 // hash function prototype
-typedef uintptr_t (*hash_fn_t)(void *, size_t);
+typedef uintptr_t (*hash_fn_t)(uintptr_t);
 
 typedef struct hm_info{
     hash_fn_t hash_func;
@@ -196,7 +198,7 @@ static uintptr_t key_find_helper(
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
     uint8_t i = 0;
-    uintptr_t hash = hash_fn(&key, sizeof(key)), truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
+    uintptr_t hash = hash_fn(key), truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
     uintptr_t step = PROBE_STEP;
     uintptr_t cap_mask = hm_cap(ptr) - 1;
     for (; i < PROBE_TRIES; ++i){
@@ -209,8 +211,8 @@ static uintptr_t key_find_helper(
         uintptr_t *keys = bucket->keys;
         uint32_t *indices = bucket->indices;
 
-        uint8_t j = key_i, times = GROUP_SIZE, grp_mask = GROUP_SIZE - 1;
-        for (; times > 0; --times, j = (j + 1) & grp_mask){
+        uint8_t j = key_i, times = GROUP_SIZE;
+        for (; times > 0; --times, j = (j + 1) & GROUP_MASK){
             if (find_empty){
                 // look through the slot meta to find an empty slot.
                 // We don't need to look through every slot in the bucket since

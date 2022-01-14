@@ -1,5 +1,5 @@
-#include"hmap.h"
-#include "ahash.h"
+#include "hmap.h"
+#include "ant_hash.h"
 #include "test_helpers.h"
 #include <stdlib.h>
 
@@ -7,7 +7,7 @@
 int main(){
     
     uint16_t *hmap = NULL;
-    hm_init(hmap, 32, realloc, ahash_buf);
+    hm_init(hmap, 32, realloc, ant_hash);
 
     TEST_GROUP("Basic init");
     TEST_INT_EQ(hm_num(hmap), 0);
@@ -66,7 +66,7 @@ int main(){
     TEST_GROUP_OK();
 
     TEST_GROUP("Bulk insert");
-    hm_init(hmap, 32, realloc, ahash_buf);
+    hm_init(hmap, 32, realloc, ant_hash);
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         printf("key=%u\n", i);

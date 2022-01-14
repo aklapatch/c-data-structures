@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #include "hmap.h"
-#include "ahash.h"
+#include "ant_hash.h"
 #include "test_helpers.h"
 
 #define STB_DS_IMPLEMENTATION
@@ -15,16 +15,13 @@
 // compare this hash table with the STB hash table to at least make sure
 // we're within 2x slower performance
 
-uintptr_t stbds_test_hash(void *data, size_t len){
-    return stbds_hash_bytes(data, len, 0x31415926);
-}
 int main(){
 
     // init hmap to minimum size with a reasonable sized payload type
     clock_t ins_tot = 0, query_tot = 0;
     for (uint8_t j = RNDS; j > 0; --j){
         uint32_t *hmap = NULL;
-        hm_init(hmap, 16, realloc, stbds_test_hash);
+        hm_init(hmap, 16, realloc, ant_hash);
 
         clock_t start = clock();
         for (uint32_t i = 0; i < TIMES; ++i){

@@ -1,6 +1,5 @@
 #include"hmap.h"
-#include "ahash.h"
-#include "xxhash.h"
+#include "ant_hash.h"
 #include "test_helpers.h"
 #include <stdlib.h>
 #include <time.h>
@@ -16,7 +15,7 @@ int main(){
     clock_t ins_tot = 0, query_tot = 0;
     for (uint8_t j = RNDS; j > 0; --j){
         uint32_t *hmap = NULL;
-        hm_init(hmap, 16, realloc, xxhash_buf);
+        hm_init(hmap, 16, realloc, ant_hash);
 
         clock_t start = clock();
         for (uint32_t i = 0; i < TIMES; ++i){
