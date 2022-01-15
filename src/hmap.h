@@ -1,4 +1,5 @@
 #pragma once
+#include "ant_hash.h"
 #include "dynarr.h"
 #include "bit_setting.h"
 
@@ -443,20 +444,51 @@ uintptr_t hm_raw_insert_key(
     return val_dex;
 }
 
+// sets ptr->tmp_val_i to something useful on success
+void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
+#ifdef _STDLIB_H
+    if (ptr == NULL){
+        ptr = hm_bare_realloc(ptr, realloc, ant_hash, 16, item_size);
+    }
+#else 
+#pragma message ("stdlib.h not included. Please use hm_init to specify an allocator!")
+    if (ptr == NULL){
+        return NULL;
+    }
+#endif
+    // init the ptr if necessary
+    // try the insert, and resize if needed
+    for (uint8_t grow_tries = 3; grow_tries > 0; --grow_tries){
+        if (!should_grow(ptr)){
+            // ptr could change since we realloced, so keep getting it.
+            uintptr_t *val_ptr = &hm_info_ptr(ptr)->tmp_val_i;
+            *val_ptr = hm_raw_insert_key(ptr, key);
+            if (*val_ptr != UINTPTR_MAX){
+                // we're done
+                hm_set_err(ptr, ds_success);
+                return ptr;
+            }
+        }
+        ptr = hm_bare_realloc(
+            ptr,
+            hm_realloc_fn(ptr),
+            hm_hash_func(ptr),
+            hm_cap(ptr) + 1,
+            item_size);
+    }
+    // didn't find a slot, if the errors are already set then let them
+    // go
+    if (!hm_is_err_set(ptr)){
+        hm_set_err(ptr, ds_not_found);
+    }
+    return ptr;
+}
+
 #define hm_set(ptr, k, v)\
     do{\
-        for (uint8_t __hm_grow_tries = 3; __hm_grow_tries > 0; --__hm_grow_tries){\
-            if (!should_grow(ptr)){ \
-                hm_info_ptr(ptr)->tmp_val_i = hm_raw_insert_key(ptr, k);\
-                if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
-                    ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
-                    hm_set_err(ptr, ds_success); \
-                    break;\
-                } else { \
-                    hm_set_err(ptr, ds_not_found); \
-                } \
-            } \
-            hm_realloc(ptr, hm_cap(ptr)+1);\
+        ptr = hm_try_insert(ptr, k, sizeof(*(ptr)));\
+        if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX){\
+            ptr[hm_info_ptr(ptr)->tmp_val_i] = v;\
         }\
     }while(0)
 

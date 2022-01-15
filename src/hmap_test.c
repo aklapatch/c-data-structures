@@ -1,7 +1,6 @@
-#include "hmap.h"
-#include "ant_hash.h"
-#include "test_helpers.h"
 #include <stdlib.h>
+#include "hmap.h"
+#include "test_helpers.h"
 
 #define NUM_KEYS (31)
 int main(){
