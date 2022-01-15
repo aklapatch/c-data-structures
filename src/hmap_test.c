@@ -88,5 +88,7 @@ int main(){
     }
     TEST_GROUP_OK();
 
+    hm_free(hmap);
+
     return 0;
 }
