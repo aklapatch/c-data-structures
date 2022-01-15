@@ -57,7 +57,6 @@ uint8_t *hm_val_meta_ptr(void * ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
 }
 
-
 hash_fn_t hm_hash_func(void *ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
 }
@@ -109,12 +108,9 @@ void free_helper(void *ptr){
     }
 }
 void _hm_free(void * ptr){
-    if (ptr != NULL){
-        void *ignore_ptr = HM_REALLOC_FN(hm_bucket_ptr(ptr), 0);
-        ignore_ptr = HM_REALLOC_FN(hm_val_meta_ptr(ptr), 0);
-        ignore_ptr = HM_REALLOC_FN(hm_info_ptr(ptr), 0);
-        (void)ignore_ptr;
-    }
+    free_helper(hm_bucket_ptr(ptr));
+    free_helper(hm_val_meta_ptr(ptr));
+    free_helper(hm_info_ptr(ptr));
 }
 
 #define hm_free(ptr) _hm_free(ptr),ptr=NULL
