@@ -273,6 +273,11 @@ val_search:
                 break;
             }
         }
+    } else if (dex_slot_out != NULL){
+        // return the dex slot if we're searching for a key
+        uintptr_t key_bucket; uint8_t key_i;
+        one_i_to_bucket_is(key_ret_i, key_bucket, key_i);
+        *dex_slot_out = buckets[key_bucket].indices[key_i];
     }
 
     return key_ret_i;
@@ -322,6 +327,14 @@ void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uin
         // old pointer is still good, return that
         return ptr;
     }
+    inf_ptr->outside_mem = false;
+    inf_ptr->err = ds_success;
+
+    if (base_ptr == NULL){
+        //allocating new array
+        inf_ptr->num = 0;
+        inf_ptr->hash_func = hash_func;
+    }
 
     uintptr_t num_val_metas = (new_cap + 7)/8;
     // Don't use base_ptr->val_metas, That can get zeroed out after it's reallocated
@@ -335,7 +348,7 @@ void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uin
 
     inf_ptr->val_metas = new_val_metas;
 
-    // zero out new val_meta portion to 
+    // zero out new val_meta portion
     for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
         inf_ptr->val_metas[i] = 0;
     }
@@ -352,13 +365,7 @@ void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uin
     // associate the key pointer with the new structure
     inf_ptr->buckets = bucket_ptr;
     inf_ptr->cap = new_cap;
-    inf_ptr->outside_mem = false;
 
-    if (base_ptr == NULL){
-        //allocating new array
-        inf_ptr->num = 0;
-        inf_ptr->hash_func = hash_func;
-    }
 
     // set the new meta to empty
     for (uintptr_t i = 0; i < num_buckets; ++i){
@@ -493,10 +500,11 @@ void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
 
 static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
 
+    uintptr_t val_i = UINTPTR_MAX;
     uintptr_t key_dex = key_find_helper(
             ptr,
             key,
-            NULL,
+            &val_i,
             false);
 
     if (key_dex == UINTPTR_MAX){ 
@@ -504,9 +512,7 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
         return UINTPTR_MAX; 
     }
 
-    uintptr_t key_bucket; uint8_t key_i;
-    one_i_to_bucket_is(key_dex, key_bucket, key_i);
-    return hm_bucket_ptr(ptr)[key_bucket].indices[key_i];
+    return val_i;
 }
 
 #define hm_get(ptr, key, val_to_set)\
@@ -518,7 +524,7 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
     } while(0)
 
 // TODO: STB just puts the newest element at the end of the array and memmoves 
-// old elements over the removed one. Implement that so we can get rid of val_meta
+// an old element over the removed one. Implement that so we can get rid of val_meta
 // We don't need to really worry about it right now since queries are about as
 // fast as STB's
 void hm_del(void *ptr, uintptr_t key){
