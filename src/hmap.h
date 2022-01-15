@@ -78,7 +78,7 @@ uintptr_t hm_num(void * ptr){
 
 // grow around 40% full
 bool should_grow(void *ptr){
-    uintptr_t target_thresh = (hm_cap(ptr)*2)/5;
+    uintptr_t target_thresh = (hm_cap(ptr)*8)/20;
     return hm_num(ptr) >= target_thresh;
 }
 
@@ -120,7 +120,7 @@ void _hm_free(void * ptr){
 
 #define hm_free(ptr) _hm_free(ptr),ptr=NULL
 
-#define hm_init(ptr, num_items, hash_func) ptr = hm_bare_realloc(NULL, hash_func, num_items, sizeof(*ptr))
+#define hm_init(ptr, num_items, hash_func) ptr = hm_raw_grow(NULL, hash_func, num_items, sizeof(*ptr))
 
 bool hm_slot_empty(uintptr_t index){
     return index == DEX_TS;
@@ -305,10 +305,15 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
 }
 
 // handle both the init and growing case, but not shrinking yet.
-void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
+void* hm_raw_grow(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
     uint8_t greater_size = (GROUP_SIZE > 8) ? GROUP_SIZE : 8;
     item_count = (item_count < 2*greater_size) ? 2*greater_size : item_count;
+
+    // shrinking is not implemented yet
+    if (item_count < hm_cap(ptr)){
+        return ptr;
+    }
 
     // should be null safe, base_ptr will be null if ptr is null
     hm_info *base_ptr = hm_info_ptr(ptr);
@@ -380,32 +385,25 @@ void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uin
         return inf_ptr;
     }
 
-    uintptr_t num_items = hm_num(inf_ptr), key_buf[GROUP_SIZE];
+    uintptr_t num_items = hm_num(inf_ptr);
     // search the old key structure for keys
-    uint32_t dex_buf[GROUP_SIZE]; 
-    uint8_t key_i = 0;
     for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
             if (old_bucket_ptr[bucket_i].indices[i] != DEX_TS){
-                // fill up the buffer
-                key_buf[key_i] = old_bucket_ptr[bucket_i].keys[i];
-                dex_buf[key_i] = old_bucket_ptr[bucket_i].indices[i]; 
-                ++key_i;
-                --num_items;
-                if (key_i == GROUP_SIZE || num_items == 0){
-                    for (uint8_t j = 0; j < key_i; ++j){
-                        uintptr_t ret = insert_key_and_dex(inf_ptr, key_buf[j], dex_buf[j]);
-                        if (ret == UINTPTR_MAX){
-                            hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
-                            // free the old memory
-                            free_helper(bucket_ptr);
-                            goto done;
-                        } 
-                    }
-                    if (num_items == 0){
-                        goto free_old_bucket;
-                    }
-                    key_i = 0;
+                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
+                uint32_t dex = old_bucket_ptr[bucket_i].indices[i];
+                uintptr_t ret = insert_key_and_dex(
+                        inf_ptr, 
+                        key, 
+                        dex);
+                if (ret == UINTPTR_MAX){
+                    hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
+                    // free the old memory
+                    free_helper(bucket_ptr);
+                    goto done;
+                } 
+                if (num_items == 0){
+                    goto free_old_bucket;
                 }
             }
         }
@@ -420,7 +418,7 @@ done:
     return inf_ptr;
 }
 
-#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, hm_hash_func(ptr), new_cap, sizeof(*ptr))
+#define hm_grow(ptr, new_cap) ptr = hm_raw_grow(ptr, hm_hash_func(ptr), new_cap, sizeof(*ptr))
 
 // returns the value index
 // sets the key slot found
@@ -460,7 +458,7 @@ uintptr_t hm_raw_insert_key(
 // sets ptr->tmp_val_i to something useful on success
 void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
     if (ptr == NULL){
-        ptr = hm_bare_realloc(ptr, ant_hash, 16, item_size);
+        ptr = hm_raw_grow(ptr, ant_hash, 16, item_size);
     }
 
     // init the ptr if necessary
@@ -476,7 +474,7 @@ void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
                 return ptr;
             }
         }
-        ptr = hm_bare_realloc(
+        ptr = hm_raw_grow(
             ptr,
             hm_hash_func(ptr),
             hm_cap(ptr) + 1,

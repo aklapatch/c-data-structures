@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include "hmap.h"
 #include "test_helpers.h"
 
@@ -16,7 +15,7 @@ int main(){
 
     // insert a lot of values and see how this goes.
     TEST_GROUP("Insert a few keys");
-    for (uint32_t i = 0; i < NUM_KEYS; ++i){
+    for (uint16_t i = 0; i < NUM_KEYS; ++i){
         // insert the value
         hm_set(hmap, i, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
@@ -28,7 +27,7 @@ int main(){
     }
 
     // make sure all values didn't get overwritten
-    for (uint32_t i = 0; i < NUM_KEYS; ++i){
+    for (uint16_t i = 0; i < NUM_KEYS; ++i){
         uint16_t out_val = UINT16_MAX;
         hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_success);
@@ -37,11 +36,14 @@ int main(){
     TEST_GROUP_OK();
 
     TEST_GROUP("Realloc key preservation");
-    hm_realloc(hmap, 64);
+    hm_grow(hmap, 64);
     // try resizing the hmap and see if all the key are still there
-    for (uint32_t i = 0; i < NUM_KEYS; ++i){
+    for (uint16_t i = 0; i < NUM_KEYS; ++i){
         uint16_t out_val = UINT16_MAX;
-        hm_get(hmap, i, out_val);
+        hm_info_ptr(hmap)->tmp_val_i = hm_find_val_i(hmap, i);
+        if (hm_info_ptr(hmap)->tmp_val_i != UINTPTR_MAX){\
+            out_val= hmap[hm_info_ptr(hmap)->tmp_val_i];\
+        }
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
@@ -49,7 +51,7 @@ int main(){
 
     // try deleting all the keys and make sure they're gone
     TEST_GROUP("Ensure deletion");
-    for (uint32_t i = 0; i < NUM_KEYS; ++i){
+    for (uint16_t i = 0; i < NUM_KEYS; ++i){
         hm_del(hmap, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
@@ -67,7 +69,7 @@ int main(){
     TEST_GROUP("Bulk insert");
     hm_init(hmap, 32, ant_hash);
     // insert a stupid number of keys and see if it still works
-    for (uint32_t i = 0; i < UINT16_MAX; ++i){
+    for (uint16_t i = 0; i < UINT16_MAX; ++i){
         printf("key=%u\n", i);
         hm_set(hmap, i, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
@@ -77,7 +79,7 @@ int main(){
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
-    for (uint32_t i = 0; i < UINT16_MAX; ++i){
+    for (uint16_t i = 0; i < UINT16_MAX; ++i){
         uint16_t out_val = UINT16_MAX;
         printf("key=%u\n", i);
         hm_get(hmap, i, out_val);
