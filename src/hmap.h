@@ -19,7 +19,7 @@
 #define GROUP_MASK (GROUP_SIZE - 1)
 
 // with the hmap_bench this hits diminishing returns around 20-40
-#define PROBE_TRIES (5)
+#define PROBE_TRIES (9)
 
 #define one_i_to_val_is(main_i, bucket_i, key_i) bucket_i = (main_i)/8; key_i = main_i - (bucket_i*8)
 #define val_is_to_one_i(main_i, bucket_i, key_i) (main_i) = bucket_i*8 + key_i
@@ -76,9 +76,8 @@ uintptr_t hm_num(void * ptr){
     return (tmmp == NULL) ? 0 : tmmp->num;
 }
 
-// grow around 40% full
 bool should_grow(void *ptr){
-    uintptr_t target_thresh = (hm_cap(ptr)*8)/20;
+    uintptr_t target_thresh = (hm_cap(ptr)*12)/16;
     return hm_num(ptr) >= target_thresh;
 }
 
