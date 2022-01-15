@@ -40,10 +40,7 @@ int main(){
     // try resizing the hmap and see if all the key are still there
     for (uint16_t i = 0; i < NUM_KEYS; ++i){
         uint16_t out_val = UINT16_MAX;
-        hm_info_ptr(hmap)->tmp_val_i = hm_find_val_i(hmap, i);
-        if (hm_info_ptr(hmap)->tmp_val_i != UINTPTR_MAX){\
-            out_val= hmap[hm_info_ptr(hmap)->tmp_val_i];\
-        }
+        hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_success);
         TEST_INT_EQ(out_val, i);
     }
