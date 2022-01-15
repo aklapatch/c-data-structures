@@ -304,7 +304,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
 }
 
 // handle both the init and growing case, but not shrinking yet.
-void* hm_raw_grow(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
+void *hm_raw_grow(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
     uint8_t greater_size = (GROUP_SIZE > 8) ? GROUP_SIZE : 8;
     item_count = (item_count < 2*greater_size) ? 2*greater_size : item_count;
