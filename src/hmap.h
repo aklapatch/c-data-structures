@@ -3,6 +3,11 @@
 #include "dynarr.h"
 #include "bit_setting.h"
 
+#ifndef HM_REALLOC_FN
+#include <stdlib.h>
+#define HM_REALLOC_FN realloc
+#endif
+
 // tombstone (empty) marker
 #define DEX_TS (UINT32_MAX)
 
@@ -36,7 +41,6 @@ typedef uintptr_t (*hash_fn_t)(uintptr_t);
 
 typedef struct hm_info{
     hash_fn_t hash_func;
-    realloc_fn_t realloc_fn;
     // holds the metadata for the hash table.
     hash_bucket* buckets;
     uint8_t *val_metas;
@@ -56,10 +60,6 @@ uint8_t *hm_val_meta_ptr(void * ptr){
 
 hash_fn_t hm_hash_func(void *ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
-}
-
-realloc_fn_t hm_realloc_fn(void *ptr){
-    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->realloc_fn;
 }
 
 hash_bucket* hm_bucket_ptr(void * ptr){
@@ -103,17 +103,24 @@ char * hm_err_str(void *ptr){
     return ds_get_err_str(hm_err(ptr));
 }
 
+void free_helper(void *ptr){
+    if (ptr != NULL){
+        void * ignore_ptr = HM_REALLOC_FN(ptr, 0);
+        (void)ignore_ptr;
+    }
+}
 void _hm_free(void * ptr){
     if (ptr != NULL){
-        realloc_fn_t realloc_fn = hm_realloc_fn(ptr);
-        (void)realloc_fn(hm_bucket_ptr(ptr), 0);
-        (void)realloc_fn(hm_info_ptr(ptr), 0);
+        void *ignore_ptr = HM_REALLOC_FN(hm_bucket_ptr(ptr), 0);
+        ignore_ptr = HM_REALLOC_FN(hm_val_meta_ptr(ptr), 0);
+        ignore_ptr = HM_REALLOC_FN(hm_info_ptr(ptr), 0);
+        (void)ignore_ptr;
     }
 }
 
 #define hm_free(ptr) _hm_free(ptr),ptr=NULL
 
-#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_bare_realloc(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
+#define hm_init(ptr, num_items, hash_func) ptr = hm_bare_realloc(NULL, hash_func, num_items, sizeof(*ptr))
 
 bool hm_slot_empty(uintptr_t index){
     return index == DEX_TS;
@@ -293,7 +300,7 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
 }
 
 // handle both the init and growing case, but not shrinking yet.
-void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
+void* hm_bare_realloc(void * ptr, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
     uint8_t greater_size = (GROUP_SIZE > 8) ? GROUP_SIZE : 8;
     item_count = (item_count < 2*greater_size) ? 2*greater_size : item_count;
@@ -309,7 +316,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
 
-    hm_info * inf_ptr = realloc_fn(base_ptr, data_size);
+    hm_info * inf_ptr = HM_REALLOC_FN(base_ptr, data_size);
     if (inf_ptr == NULL){
         hm_set_err(ptr, ds_alloc_fail);
         // old pointer is still good, return that
@@ -319,7 +326,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     uintptr_t num_val_metas = (new_cap + 7)/8;
     // Don't use base_ptr->val_metas, That can get zeroed out after it's reallocated
     uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : inf_ptr->val_metas;
-    uint8_t *new_val_metas = realloc_fn(old_val_metas, num_val_metas);
+    uint8_t *new_val_metas = HM_REALLOC_FN(old_val_metas, num_val_metas);
     if (new_val_metas == NULL){
         ++inf_ptr;
         hm_set_err(inf_ptr, ds_alloc_fail);
@@ -335,7 +342,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
 
     // old_bucket_ptr is not necessary if allocating from scratch
     hash_bucket *old_bucket_ptr = inf_ptr->buckets;
-    hash_bucket *bucket_ptr = realloc_fn(NULL, bucket_size);
+    hash_bucket *bucket_ptr = HM_REALLOC_FN(NULL, bucket_size);
     if (bucket_ptr == NULL){
         ++inf_ptr;
         hm_set_err(inf_ptr, ds_alloc_fail);
@@ -350,7 +357,6 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
     if (base_ptr == NULL){
         //allocating new array
         inf_ptr->num = 0;
-        inf_ptr->realloc_fn = realloc_fn;
         inf_ptr->hash_func = hash_func;
     }
 
@@ -385,7 +391,7 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
                         if (ret == UINTPTR_MAX){
                             hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
                             // free the old memory
-                            (void)realloc_fn(bucket_ptr, 0);
+                            free_helper(bucket_ptr);
                             goto done;
                         } 
                     }
@@ -400,14 +406,14 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
 
     // success, free old buckets
 free_old_bucket:
-    (void)realloc_fn(old_bucket_ptr, 0);
+    free_helper(old_bucket_ptr);
 
 done:
     hm_set_err(inf_ptr, ds_success);
     return inf_ptr;
 }
 
-#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, hm_realloc_fn(ptr), hm_hash_func(ptr), new_cap, sizeof(*ptr))
+#define hm_realloc(ptr, new_cap) ptr = hm_bare_realloc(ptr, hm_hash_func(ptr), new_cap, sizeof(*ptr))
 
 // returns the value index
 // sets the key slot found
@@ -446,16 +452,10 @@ uintptr_t hm_raw_insert_key(
 
 // sets ptr->tmp_val_i to something useful on success
 void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
-#ifdef _STDLIB_H
     if (ptr == NULL){
-        ptr = hm_bare_realloc(ptr, realloc, ant_hash, 16, item_size);
+        ptr = hm_bare_realloc(ptr, ant_hash, 16, item_size);
     }
-#else 
-#pragma message ("stdlib.h not included. Please use hm_init to specify an allocator!")
-    if (ptr == NULL){
-        return NULL;
-    }
-#endif
+
     // init the ptr if necessary
     // try the insert, and resize if needed
     for (uint8_t grow_tries = 3; grow_tries > 0; --grow_tries){
@@ -471,7 +471,6 @@ void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
         }
         ptr = hm_bare_realloc(
             ptr,
-            hm_realloc_fn(ptr),
             hm_hash_func(ptr),
             hm_cap(ptr) + 1,
             item_size);

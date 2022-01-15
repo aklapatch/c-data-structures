@@ -6,7 +6,7 @@
 int main(){
     
     uint16_t *hmap = NULL;
-    hm_init(hmap, 32, realloc, ant_hash);
+    hm_init(hmap, 32, ant_hash);
 
     TEST_GROUP("Basic init");
     TEST_INT_EQ(hm_num(hmap), 0);
@@ -65,7 +65,7 @@ int main(){
     TEST_GROUP_OK();
 
     TEST_GROUP("Bulk insert");
-    hm_init(hmap, 32, realloc, ant_hash);
+    hm_init(hmap, 32, ant_hash);
     // insert a stupid number of keys and see if it still works
     for (uint32_t i = 0; i < UINT16_MAX; ++i){
         printf("key=%u\n", i);
