@@ -8,7 +8,7 @@ hmap: src/hmap.h src/hmap_test.c src/test_helpers.h
 	$(CC) $(DBG_CFLAGS) src/hmap_test.c -o $(OUTDIR)/hmap_test
 
 hash_bench: src/hash_bench.c src/ahash.h src/xxhash.h
-	$(CC) -Wall -Wextra -O1 -g3 src/hash_bench.c -o $(OUTDIR)/hash_bench
+	$(CC) -Wall -Wextra -O1 -g src/hash_bench.c -o $(OUTDIR)/hash_bench
 	$(OUTDIR)/hash_bench
 
 perf_hash_bench: hash_bench

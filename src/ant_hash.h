@@ -6,14 +6,16 @@
 // faster than other more generic hash functions since those more generic hash 
 // functions have different branches to handle alignment, and we don't need those
 
-uintptr_t ant_rot_left(uintptr_t n, uint8_t num){
-    return (n << num) | (n >> ((sizeof(n) * 8) - num));
-}
-
 // The more architecture portable version. A uintptr_t will be change between 
 // 32 and 64 bits as needed
+// Tried multiplying by the golden ration and that did not help. Primes work better.
+// Played with the shift amt and 8*2 for 64 bit ptrs seems to work well enough.
+// Doing the 2nd bit mix seems to work well enough too
 uintptr_t ant_hash(uintptr_t in){
+    const uint8_t shift_amt = sizeof(in)*2;
     const uintptr_t prime1 = 22468225119U;
-    in ^= ant_rot_left(in, sizeof(in)*4);
+    in ^= in >> shift_amt;
+    in ^= in >> shift_amt;
+    in *= prime1;
     return in * prime1;
 }

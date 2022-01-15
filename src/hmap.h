@@ -366,7 +366,6 @@ void* hm_bare_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, 
         return inf_ptr;
     }
 
-    // TODO re-insert keys, but leave the indexes since they're okay
     uintptr_t num_items = hm_num(inf_ptr), key_buf[GROUP_SIZE];
     // search the old key structure for keys
     uint32_t dex_buf[GROUP_SIZE]; 

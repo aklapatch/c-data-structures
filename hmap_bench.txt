@@ -1,4 +1,4 @@
-5717f84
+3bd34c2
 model name	: Intel(R) Core(TM) i3-6100U CPU @ 2.30GHz
-196605 insertions took 1.18188 sec 1181875 clocks over 40 runs
-196605 qeuries took 0.336297 sec 336297 clocks over 40 runs
+196605 insertions took 1.17007 sec 1170071 clocks over 40 runs
+196605 qeuries took 0.323853 sec 323853 clocks over 40 runs
