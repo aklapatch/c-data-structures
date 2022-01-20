@@ -51,3 +51,8 @@ I also need to try messing with when the table grows. (a load factor of 2/5 is r
 
 Making the hash function a macro and not a function pointer helps performance a little bit. insertions go from 1.20 ish to 1.16 ish
 I think I'm going to leave the realloc fn to be a macro and the hash_fn to be a run-time param. There's not much difference either way, but keeping realloc as a macro allows me to conditionally include stdlib.h, which I like better than checking if it's already included
+
+To do stb's memov to remove a value, I need to either duplicate their memory layout, with hashes and indices, or I can add another u32 array assocated with the values that hold the indexes to the keys they are associate with.
+
+I don't know whether to flatten out the key and index arrays instead of using the buckets. I also want to switch to using a key sentinel to see if a key is not taken instead of using an index sentinel.
+UINTPTR_MAX seems like a reasonable key to reject.

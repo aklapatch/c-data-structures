@@ -1,7 +1,6 @@
-#include"hmap.h"
-#include "ant_hash.h"
-#include "test_helpers.h"
 #include <stdlib.h>
+#include"hmap.h"
+#include "test_helpers.h"
 #include <time.h>
 #include <stdio.h>
 
@@ -15,7 +14,6 @@ int main(){
     clock_t ins_tot = 0, query_tot = 0;
     for (uint8_t j = RNDS; j > 0; --j){
         uint32_t *hmap = NULL;
-        hm_init(hmap, 16, ant_hash);
 
         clock_t start = clock();
         for (uint32_t i = 0; i < TIMES; ++i){
@@ -28,6 +26,7 @@ int main(){
         ins_tot += clock() - start;
 
         // search for all the keys we inserted.
+#if 0
         start = clock();
         for (uint32_t i = 0; i < TIMES; ++i){
             uint32_t out_val = UINT32_MAX;
@@ -39,12 +38,13 @@ int main(){
         }
 
         query_tot += clock() - start;
+#endif
 
         hm_free(hmap);
     }
 
     printf("%u insertions took %g sec %lu clocks over %u runs\n",TIMES, (double)(ins_tot)/CLOCKS_PER_SEC, ins_tot, RNDS);
-    printf("%u qeuries took %g sec %lu clocks over %u runs\n",TIMES, (double)(query_tot)/CLOCKS_PER_SEC, query_tot, RNDS);
+    //printf("%u qeuries took %g sec %lu clocks over %u runs\n",TIMES, (double)(query_tot)/CLOCKS_PER_SEC, query_tot, RNDS);
 
     return 0;
 }

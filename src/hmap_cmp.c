@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include "hmap.h"
-#include "ant_hash.h"
 #include "test_helpers.h"
 
 #define STB_DS_IMPLEMENTATION
