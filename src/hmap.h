@@ -246,27 +246,9 @@ val_search:
     // start looking through everything for a val slot
     // use the old values of bucket_i and key_i
     if (dex_slot_out != NULL && find_empty){
-        uint8_t * val_metas = hm_val_meta_ptr(ptr);
-        for (uint8_t j = 0; *dex_slot_out == UINTPTR_MAX; ++j){
-            // use the stored hash if we have onw
-            uintptr_t main_i;
-            if (j <= i){
-                main_i = truncated_hashes[j]; 
-            } else {
-                hash += step;
-                main_i = hash & cap_mask;
-                step += PROBE_STEP;
-            }
-
-            uintptr_t val_i; uint8_t val_bit_i;
-            one_i_to_val_is(main_i, val_i, val_bit_i);
-
-            uint8_t slot = hm_val_meta_to_open_i(val_metas[val_i]);
-            if (slot != UINT8_MAX){
-                val_is_to_one_i(*dex_slot_out, val_i, slot);
-                break;
-            }
-        }
+        // return the next slot in the value array
+        // This 
+        *dex_slot_out = hm_num(ptr);
     } else if (dex_slot_out != NULL){
         // return the dex slot if we're searching for a key
         uintptr_t key_bucket; uint8_t key_i;
@@ -537,7 +519,7 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
 // an old element over the removed one. Implement that so we can get rid of val_meta
 // We don't need to really worry about it right now since queries are about as
 // fast as STB's
-void hm_del(void *ptr, uintptr_t key){
+uintptr_t _hm_del(void *ptr, uintptr_t key){
 
     uintptr_t val_dex, key_dex = key_find_helper(
             ptr,
@@ -547,7 +529,7 @@ void hm_del(void *ptr, uintptr_t key){
 
     if (key_dex == UINTPTR_MAX){
         hm_set_err(ptr, ds_not_found);
-        return;
+        return UINTPTR_MAX;
     }
 
     uintptr_t bucket_i; uint8_t key_i;
@@ -555,8 +537,28 @@ void hm_del(void *ptr, uintptr_t key){
 
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
-    bit_set_or_clear(hm_val_meta_ptr(ptr), buckets[bucket_i].val_i[key_i], false);
+    hm_info_ptr(ptr)->num--;
 
+    // the del macro should move the end val_i to the spot we just deleted
     buckets[bucket_i].val_i[key_i] = DEX_TS;
+
+    // set the to-be-moved val to point to the key slot (the key slot does not move)
+    uint8_t in_bucket_i;
+    one_i_to_bucket_is(val_dex, bucket_i, in_bucket_i);
+    uint32_t same_key_i  = buckets[bucket_i].key_i[in_bucket_i];
+
+    // grab the key_i for the last entry in the value list
     hm_set_err(ptr, ds_success);
+    return val_dex;
 }
+
+// move the end value to the slot that we freed if necessary
+// hm_num() has already been decremented, so we just need a < and not a < num - 1
+#define hm_del(ptr, key)\
+    do {\
+        hm_info_ptr(ptr)->tmp_val_i = _hm_del(ptr, key);\
+        if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX && \
+            hm_info_ptr(ptr)->tmp_val_i < hm_num(ptr)){\
+            ptr[hm_info_ptr(ptr)->tmp_val_i] = ptr[hm_num(ptr)];\
+        }\
+    } while(0)

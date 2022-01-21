@@ -57,6 +57,7 @@ int main(){
         hm_get(hmap, i, out_val);
         TEST_INT_EQ(hm_err(hmap), ds_not_found);
     }
+    TEST_INT_EQ(hm_num(hmap), 0);
     TEST_GROUP_OK();
 
     TEST_GROUP("hmap free");
@@ -86,6 +87,50 @@ int main(){
     }
     TEST_GROUP_OK();
 
+    TEST_GROUP("Bulk delete");
+    // try deleting everything and then see if the keys are still there
+    for (uint16_t i = 0; i < UINT16_MAX; ++i){
+        hm_del(hmap, i);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+
+        uint16_t out_val = UINT16_MAX;
+        hm_get(hmap, i, out_val);
+        TEST_INT_EQ(hm_err(hmap), ds_not_found);
+    }
+    TEST_INT_EQ(hm_num(hmap), 0);
+
+    TEST_GROUP_OK();
+    
+    TEST_GROUP("opposite order insert + delete");
+    // re-insert keys in the opposite order to see if that works
+    for (uint16_t i = UINT16_MAX - 1; i > 0; --i){
+        printf("key=%u\n", i);
+        hm_set(hmap, i, i);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+
+        uint16_t out_val = UINT16_MAX;
+        hm_get(hmap, i, out_val);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+        TEST_INT_EQ(out_val, i);
+    }
+
+    uint16_t stop_val = UINT16_MAX/16;
+    for (uint16_t i = 1; i < stop_val; ++i){
+        printf("del key=%u\n", i);
+        hm_del(hmap, i);
+        TEST_INT_EQ(hm_err(hmap), ds_success);
+
+        // query all the values that should still be there
+        for (uint16_t j = i + 1; j < stop_val; ++j){
+            uint16_t out_val = UINT16_MAX;
+            hm_get(hmap, j, out_val);
+            TEST_INT_EQ(hm_err(hmap), ds_success);
+            TEST_INT_EQ(out_val, j);
+        }
+    }
+
+    TEST_GROUP_OK();
+    
     hm_free(hmap);
 
     return 0;

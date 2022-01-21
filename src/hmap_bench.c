@@ -26,7 +26,6 @@ int main(){
         ins_tot += clock() - start;
 
         // search for all the keys we inserted.
-#if 0
         start = clock();
         for (uint32_t i = 0; i < TIMES; ++i){
             uint32_t out_val = UINT32_MAX;
@@ -38,13 +37,12 @@ int main(){
         }
 
         query_tot += clock() - start;
-#endif
 
         hm_free(hmap);
     }
 
     printf("%u insertions took %g sec %lu clocks over %u runs\n",TIMES, (double)(ins_tot)/CLOCKS_PER_SEC, ins_tot, RNDS);
-    //printf("%u qeuries took %g sec %lu clocks over %u runs\n",TIMES, (double)(query_tot)/CLOCKS_PER_SEC, query_tot, RNDS);
+    printf("%u qeuries took %g sec %lu clocks over %u runs\n",TIMES, (double)(query_tot)/CLOCKS_PER_SEC, query_tot, RNDS);
 
     return 0;
 }
