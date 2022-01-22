@@ -2,6 +2,7 @@
 #include "ant_hash.h"
 #include "dynarr.h"
 #include "bit_setting.h"
+#include "misc.h"
 
 #define KEY_TS (UINTPTR_MAX)
 
@@ -25,19 +26,14 @@
 
 // define the dict as it's own thing, separate from the hmap, it has different needs.
 
-typedef struct {
-    uintptr_t keys[GROUP_SIZE];
-    uint32_t val_i[GROUP_SIZE]; 
-    uint32_t key_i[GROUP_SIZE];
-} hash_bucket;
-
 // hash function prototype
 typedef uintptr_t (*hash_fn_t)(uintptr_t);
 
 typedef struct hm_info{
     hash_fn_t hash_func;
     // holds the metadata for the hash table.
-    hash_bucket* buckets;
+    uintptr_t *keys;
+    uint32_t *val_i,*key_i;
     realloc_fn_t realloc_fn;
     // tmp_val_i is used to set the value array in the macros
     uintptr_t cap,num, tmp_val_i;
@@ -54,10 +50,6 @@ realloc_fn_t hm_realloc_fn(void *ptr){
 
 hash_fn_t hm_hash_func(void *ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->hash_func;
-}
-
-hash_bucket* hm_bucket_ptr(void * ptr){
-    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->buckets;
 }
 
 uintptr_t hm_cap(void * ptr){
@@ -103,7 +95,9 @@ void free_helper(void *ptr, realloc_fn_t realloc_fn){
     }
 }
 void _hm_free(void * ptr, realloc_fn_t realloc_fn){
-    free_helper(hm_bucket_ptr(ptr), realloc_fn);
+    free_helper(hm_info_ptr(ptr)->keys, realloc_fn);
+    free_helper(hm_info_ptr(ptr)->val_i, realloc_fn);
+    free_helper(hm_info_ptr(ptr)->key_i, realloc_fn);
     free_helper(hm_info_ptr(ptr), realloc_fn);
 }
 
@@ -140,28 +134,29 @@ static uintptr_t key_find_helper(
     // only error out regarding size constraints when looking for an empty slot
     if (!find_empty && hm_num(ptr) == hm_cap(ptr)){ return UINTPTR_MAX; }
 
+    // bail on a bad key_ret_i
+    if (key == KEY_TS){
+        hm_set_err(ptr, ds_bad_param);
+        return UINTPTR_MAX;
+    }
+
     uintptr_t key_ret_i = UINTPTR_MAX;
 
     hash_fn_t hash_fn = hm_hash_func(ptr);
 
-    hash_bucket* buckets = hm_bucket_ptr(ptr);
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
     uint8_t i = 0;
     uintptr_t hash = hash_fn(key), truncated_hash; // save the hashes for the value search loop
     uintptr_t step = PROBE_STEP;
     uintptr_t cap_mask = hm_cap(ptr) - 1;
+    uintptr_t *keys = hm_info_ptr(ptr)->keys;
     for (; i < PROBE_TRIES; ++i){
         // use hash first time, quadratic probe every other time
         truncated_hash = hash & cap_mask;
 
-        uintptr_t bucket_i; uint8_t key_i;
-        one_i_to_bucket_is(truncated_hash , bucket_i, key_i);
-        hash_bucket *bucket = buckets + bucket_i;
-        uintptr_t *keys = bucket->keys;
-        uint32_t *val_i = bucket->val_i;
-
-        uint8_t j = key_i, times = GROUP_SIZE;
+        uintptr_t start_i = (truncated_hash/GROUP_SIZE)*GROUP_SIZE;
+        uint8_t j = truncated_hash - start_i, times = GROUP_SIZE;
         for (; times > 0; --times, j = (j + 1) & GROUP_MASK){
             if (find_empty){
                 // look through the slot meta to find an empty slot.
@@ -169,16 +164,16 @@ static uintptr_t key_find_helper(
                 // the slot_meta array is not a bucket
                 // search the bucket and see if we can insert
                 // look for the key
-                if (keys[j] == KEY_TS){
-                    bucket_is_to_one_i(key_ret_i, bucket_i, j);
+                if (keys[start_i + j] == KEY_TS){
+                    key_ret_i = start_i + j;
                     goto val_search;
                 }
             } else {
                 // search the bucket and see if we can insert
                 // look for the key
-                if (keys[j] == key && key != KEY_TS){
-                    if (dex_slot_out != NULL) { *dex_slot_out = val_i[j]; }
-                    bucket_is_to_one_i(key_ret_i, bucket_i, j);
+                if (keys[start_i + j] == key){
+                    key_ret_i = start_i + j;
+                    if (dex_slot_out != NULL) { *dex_slot_out = hm_info_ptr(ptr)->val_i[key_ret_i]; }
                     return key_ret_i;
                 }
             }
@@ -196,12 +191,7 @@ val_search:
         // return the next slot in the value array
         // This 
         *dex_slot_out = hm_num(ptr);
-    } else if (dex_slot_out != NULL){
-        // return the dex slot if we're searching for a key
-        uintptr_t key_bucket; uint8_t key_i;
-        one_i_to_bucket_is(key_ret_i, key_bucket, key_i);
-        *dex_slot_out = buckets[key_bucket].val_i[key_i];
-    }
+    } 
 
     return key_ret_i;
 }
@@ -218,16 +208,12 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
             true);
     if (key_dex == UINTPTR_MAX){ return UINTPTR_MAX; }
 
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_bucket_is(key_dex, bucket_i, key_i);
-    hash_bucket *buckets = hm_bucket_ptr(ptr);
-    buckets[bucket_i].val_i[key_i] = dex;
-    buckets[bucket_i].keys[key_i] = key;
+    hm_info_ptr(ptr)->keys[key_dex] = key;
+    hm_info_ptr(ptr)->val_i[key_dex] = dex;
+
     //
     // set the key location for this value
-    uint8_t val_i;
-    one_i_to_val_is(dex, bucket_i, val_i);
-    buckets[bucket_i].key_i[val_i] = key_dex;
+    hm_info_ptr(ptr)->key_i[dex] = key_dex;
 
     return 0;
 }
@@ -246,11 +232,9 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
     // should be null safe, base_ptr will be null if ptr is null
     hm_info *base_ptr = hm_info_ptr(ptr);
 
+    uintptr_t old_cap = hm_cap(ptr);
     uintptr_t new_cap = next_pow2(item_count);
 
-    uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
-    uintptr_t num_buckets = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
-    uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
 
     hm_info * inf_ptr = realloc_fn(base_ptr, data_size);
@@ -269,24 +253,37 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
         inf_ptr->realloc_fn = realloc_fn;
     }
 
-    // old_bucket_ptr is not necessary if allocating from scratch
-    hash_bucket *old_bucket_ptr = inf_ptr->buckets;
-    hash_bucket *bucket_ptr = realloc_fn(NULL, bucket_size);
-    if (bucket_ptr == NULL){
-        ++inf_ptr;
-        hm_set_err(inf_ptr, ds_alloc_fail);
-        return inf_ptr;
+
+    void *old_ptrs[] = { inf_ptr->keys, inf_ptr->key_i, inf_ptr->val_i };
+    uint8_t sizes[] = { sizeof(inf_ptr->keys[0]), sizeof(inf_ptr->key_i[0]), sizeof(inf_ptr->val_i[0]) };
+    void *new_ptrs[COUNTOF(old_ptrs)];
+    // old_ptrs is not needed if allocating from stratch
+    for (uint8_t i = 0; i < COUNTOF(new_ptrs); ++i){
+        new_ptrs[i] = realloc_fn(NULL, new_cap*sizes[i]);
+        if (new_ptrs[i] == NULL){
+            // free the pointers we've already allocated
+            for (int8_t j = i - 1; j >= 0; --j){
+                free_helper(new_ptrs[j], realloc_fn);
+            }
+            ++inf_ptr;
+            hm_set_err(inf_ptr, ds_alloc_fail);
+            return inf_ptr;
+        }
     }
 
     // associate the key pointer with the new structure
-    inf_ptr->buckets = bucket_ptr;
+    inf_ptr->keys = new_ptrs[0];
+    inf_ptr->key_i = new_ptrs[1];
+    inf_ptr->val_i = new_ptrs[2];
+
     inf_ptr->cap = new_cap;
 
+    uintptr_t *old_keys = old_ptrs[0];
+    uint32_t *old_key_i = old_ptrs[1], *old_val_i = old_ptrs[2];
+
     // set the new keys
-    for (uintptr_t i = 0; i < num_buckets; ++i){
-        for (uint8_t j = 0; j < GROUP_SIZE; ++j){
-            inf_ptr->buckets[i].keys[j] = KEY_TS;
-        }
+    for (uintptr_t i = 0; i < new_cap; ++i){
+        inf_ptr->keys[i] = KEY_TS;
     }
     ++inf_ptr;
 
@@ -297,34 +294,45 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
 
     uintptr_t num_items = hm_num(inf_ptr);
     // search the old key structure for keys
-    for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
-        for (uint8_t i = 0; i < GROUP_SIZE; ++i){
-            if (old_bucket_ptr[bucket_i].keys[i] != KEY_TS){
-                uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
-                uint32_t dex = old_bucket_ptr[bucket_i].val_i[i];
-                uintptr_t ret = insert_key_and_dex(
-                        inf_ptr, 
-                        key, 
-                        dex);
-                if (ret == UINTPTR_MAX){
-                    hm_info_ptr(inf_ptr)->buckets = old_bucket_ptr;
-                    // free the old memory
-                    free_helper(bucket_ptr, realloc_fn);
-                    goto done;
-                } 
-                if (num_items == 0){
-                    goto free_old_bucket;
-                }
+    for (uintptr_t i = 0; i < old_cap; ++i){
+        if (old_keys[i] != KEY_TS){
+            uintptr_t key = old_keys[i];
+            uint32_t dex = old_val_i[i];
+
+            uintptr_t ret = insert_key_and_dex(
+                    inf_ptr, 
+                    key, 
+                    dex);
+
+            if (ret == UINTPTR_MAX){
+                hm_info_ptr(inf_ptr)->keys = old_keys;
+                hm_info_ptr(inf_ptr)->key_i = old_key_i;
+                hm_info_ptr(inf_ptr)->val_i = old_val_i;
+
+                // free the old memory
+                free_helper(new_ptrs[0], realloc_fn);
+                free_helper(new_ptrs[1], realloc_fn);
+                free_helper(new_ptrs[2], realloc_fn);
+
+                hm_set_err(inf_ptr, ds_fail);
+                goto done;
+            } 
+            --num_items;
+            if (num_items == 0){
+                goto free_old_bucket;
             }
         }
+
     }
 
     // success, free old buckets
 free_old_bucket:
-    free_helper(old_bucket_ptr, realloc_fn);
+    free_helper(old_ptrs[0], realloc_fn);
+    free_helper(old_ptrs[1], realloc_fn);
+    free_helper(old_ptrs[2], realloc_fn);
 
-done:
     hm_set_err(inf_ptr, ds_success);
+done:
     return inf_ptr;
 }
 
@@ -349,22 +357,18 @@ uintptr_t hm_raw_insert_key(
 
     if (key_dex_out == UINTPTR_MAX){ return UINTPTR_MAX; }
 
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_bucket_is(key_dex_out, bucket_i, key_i);
 
-    hash_bucket *buckets = hm_bucket_ptr(ptr);
+    uintptr_t *keys = hm_info_ptr(ptr)->keys;
     // only increment the num if we are not replacing a key
-    if (buckets[bucket_i].keys[key_i] == KEY_TS){
+    if (keys[key_dex_out] == KEY_TS){
         hm_info_ptr(ptr)->num++;
         // set that the slot is taken
     }
-    buckets[bucket_i].keys[key_i] = key;
-    buckets[bucket_i].val_i[key_i] = val_dex;
+    keys[key_dex_out] = key;
+    hm_info_ptr(ptr)->val_i[key_dex_out] = val_dex;
 
     // set the key location for this value
-    uint8_t val_i;
-    one_i_to_val_is(val_dex, bucket_i, val_i);
-    buckets[bucket_i].key_i[val_i] = key_dex_out;
+    hm_info_ptr(ptr)->key_i[val_dex] = key_dex_out;
 
     return val_dex;
 }
@@ -464,33 +468,24 @@ uintptr_t _hm_del(void *ptr, uintptr_t key){
         return UINTPTR_MAX;
     }
 
-    hash_bucket * buckets = hm_bucket_ptr(ptr);
-
     hm_info_ptr(ptr)->num--;
 
     // the del macro should move the end val_i to the spot we just deleted
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_bucket_is(key_dex, bucket_i, key_i);
-    buckets[bucket_i].keys[key_i] = KEY_TS;
+    uintptr_t *keys = hm_info_ptr(ptr)->keys;
+    keys[key_dex] = KEY_TS;
 
     // only move the val slot if the val slot is not the last slot
     if (val_dex != hm_num(ptr)){
+        uint32_t *key_i = hm_info_ptr(ptr)->key_i;
         // get the key index of the last val slot, and then move it to 
         // the slot that the last val will get moved to
-        uintptr_t val_i; uint8_t val_j;
-        one_i_to_bucket_is(val_dex, val_i, val_j);
-
-        uint32_t end_i; uint8_t end_j;
-        one_i_to_bucket_is(hm_num(ptr), end_i, end_j);
-
+        
         // grab the key_i for the last key and set the opened slot 
         // to point to the end_key
-        uint32_t end_key_i = buckets[end_i].key_i[end_j];
-        buckets[val_i].key_i[val_j] = end_key_i;
+        uint32_t end_key_i = key_i[hm_num(ptr)];
+        key_i[val_dex] = end_key_i;
 
-        // set the val_i of the key for the end val to point to the new slot.
-        one_i_to_bucket_is(end_key_i, bucket_i, key_i);
-        buckets[bucket_i].val_i[key_i] = val_dex;
+        hm_info_ptr(ptr)->val_i[end_key_i] = val_dex;
     }
 
     hm_set_err(ptr, ds_success);

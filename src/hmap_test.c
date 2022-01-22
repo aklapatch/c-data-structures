@@ -17,6 +17,7 @@ int main(){
     // insert a lot of values and see how this goes.
     TEST_GROUP("Insert a few keys");
     for (uint16_t i = 0; i < NUM_KEYS; ++i){
+        printf("key=%u\n", i);
         // insert the value
         hm_set(hmap, i, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
