@@ -55,4 +55,14 @@ I think I'm going to leave the realloc fn to be a macro and the hash_fn to be a 
 To do stb's memov to remove a value, I need to either duplicate their memory layout, with hashes and indices, or I can add another u32 array assocated with the values that hold the indexes to the keys they are associate with.
 
 I don't know whether to flatten out the key and index arrays instead of using the buckets. I also want to switch to using a key sentinel to see if a key is not taken instead of using an index sentinel.
-UINTPTR_MAX seems like a reasonable key to reject.
+UINTPTR_MAX seems like a reasonable key to reject. It does not make
+things any faster, but it seems to make them simpler, which is fine.
+
+Making the hash table keys, vals, and keys_i, into their own arrays, and that
+doesn't seem to make things any faster. It simplifies converting between
+indices, but makes error handling for memory allocation more
+compilcated.
+
+One more thing I want to try is storing the hash code in a uint16_t, and
+also using the uint16_t as a sentinel value to see if the key slot is
+open or not.
