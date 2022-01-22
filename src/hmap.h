@@ -40,7 +40,6 @@ typedef struct hm_info{
     // holds the metadata for the hash table.
     hash_bucket* buckets;
     realloc_fn_t realloc_fn;
-    uint8_t *val_metas;
     // tmp_val_i is used to set the value array in the macros
     uintptr_t cap,num, tmp_val_i;
     uint8_t err,outside_mem;
@@ -52,10 +51,6 @@ hm_info * hm_info_ptr(void * ptr){
 
 realloc_fn_t hm_realloc_fn(void *ptr){
     return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->realloc_fn;
-}
-
-uint8_t *hm_val_meta_ptr(void * ptr){
-    return (ptr == NULL) ? NULL : hm_info_ptr(ptr)->val_metas;
 }
 
 hash_fn_t hm_hash_func(void *ptr){
@@ -110,7 +105,6 @@ void free_helper(void *ptr, realloc_fn_t realloc_fn){
 }
 void _hm_free(void * ptr, realloc_fn_t realloc_fn){
     free_helper(hm_bucket_ptr(ptr), realloc_fn);
-    free_helper(hm_val_meta_ptr(ptr), realloc_fn);
     free_helper(hm_info_ptr(ptr), realloc_fn);
 }
 
@@ -302,7 +296,6 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
     uintptr_t new_cap = next_pow2(item_count);
 
     uintptr_t old_num_buckets = hm_cap(ptr)/GROUP_SIZE;
-    uintptr_t old_num_val_metas = hm_cap(ptr)/8;
     uintptr_t num_buckets = (new_cap + (GROUP_SIZE-1))/GROUP_SIZE;
     uintptr_t bucket_size = num_buckets*sizeof(hash_bucket);
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
@@ -321,23 +314,6 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
         inf_ptr->num = 0;
         inf_ptr->hash_func = hash_func;
         inf_ptr->realloc_fn = realloc_fn;
-    }
-
-    uintptr_t num_val_metas = (new_cap + 7)/8;
-    // Don't use base_ptr->val_metas, That can get zeroed out after it's reallocated
-    uint8_t *old_val_metas = (base_ptr == NULL) ? NULL : inf_ptr->val_metas;
-    uint8_t *new_val_metas = realloc_fn(old_val_metas, num_val_metas);
-    if (new_val_metas == NULL){
-        ++inf_ptr;
-        hm_set_err(inf_ptr, ds_alloc_fail);
-        return inf_ptr;
-    }
-
-    inf_ptr->val_metas = new_val_metas;
-
-    // zero out new val_meta portion
-    for (uintptr_t i = old_num_val_metas; i < num_val_metas; ++i){
-        inf_ptr->val_metas[i] = 0;
     }
 
     // old_bucket_ptr is not necessary if allocating from scratch
@@ -438,8 +414,6 @@ uintptr_t hm_raw_insert_key(
     one_i_to_val_is(val_dex, bucket_i, val_i);
     buckets[bucket_i].key_i[val_i] = key_dex_out;
 
-    bit_set_or_clear(hm_val_meta_ptr(ptr), val_dex, true);
-
     return val_dex;
 }
 
@@ -532,22 +506,35 @@ uintptr_t _hm_del(void *ptr, uintptr_t key){
         return UINTPTR_MAX;
     }
 
-    uintptr_t bucket_i; uint8_t key_i;
-    one_i_to_bucket_is(key_dex, bucket_i, key_i);
-
     hash_bucket * buckets = hm_bucket_ptr(ptr);
 
     hm_info_ptr(ptr)->num--;
 
     // the del macro should move the end val_i to the spot we just deleted
+    uintptr_t bucket_i; uint8_t key_i;
+    one_i_to_bucket_is(key_dex, bucket_i, key_i);
     buckets[bucket_i].val_i[key_i] = DEX_TS;
 
-    // set the to-be-moved val to point to the key slot (the key slot does not move)
-    uint8_t in_bucket_i;
-    one_i_to_bucket_is(val_dex, bucket_i, in_bucket_i);
-    uint32_t same_key_i  = buckets[bucket_i].key_i[in_bucket_i];
+    // only move the val slot if the val slot is not the last slot
+    if (val_dex != hm_num(ptr)){
+        // get the key index of the last val slot, and then move it to 
+        // the slot that the last val will get moved to
+        uintptr_t val_i; uint8_t val_j;
+        one_i_to_bucket_is(val_dex, val_i, val_j);
 
-    // grab the key_i for the last entry in the value list
+        uint32_t end_i; uint8_t end_j;
+        one_i_to_bucket_is(hm_num(ptr), end_i, end_j);
+
+        // grab the key_i for the last key and set the opened slot 
+        // to point to the end_key
+        uint32_t end_key_i = buckets[end_i].key_i[end_j];
+        buckets[val_i].key_i[val_j] = end_key_i;
+
+        // set the val_i of the key for the end val to point to the new slot.
+        one_i_to_bucket_is(end_key_i, bucket_i, key_i);
+        buckets[bucket_i].val_i[key_i] = val_dex;
+    }
+
     hm_set_err(ptr, ds_success);
     return val_dex;
 }

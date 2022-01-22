@@ -1,4 +1,4 @@
-e0201cf
+c199cd2
 model name	: Intel(R) Core(TM) i3-6100U CPU @ 2.30GHz
-196605 insertions took 0.714168 sec 714168 clocks over 40 runs
-196605 qeuries took 0.216269 sec 216269 clocks over 40 runs
+196605 insertions took 0.755105 sec 755105 clocks over 40 runs
+196605 qeuries took 0.235043 sec 235043 clocks over 40 runs

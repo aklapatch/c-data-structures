@@ -50,6 +50,7 @@ int main(){
     // try deleting all the keys and make sure they're gone
     TEST_GROUP("Ensure deletion");
     for (uint16_t i = 0; i < NUM_KEYS; ++i){
+        printf("1 del key=%u\n", i);
         hm_del(hmap, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
@@ -115,13 +116,13 @@ int main(){
     }
 
     uint16_t stop_val = UINT16_MAX/16;
-    for (uint16_t i = 1; i < stop_val; ++i){
+    for (uint16_t i = stop_val; i > 0 ; --i){
         printf("del key=%u\n", i);
         hm_del(hmap, i);
         TEST_INT_EQ(hm_err(hmap), ds_success);
 
         // query all the values that should still be there
-        for (uint16_t j = i + 1; j < stop_val; ++j){
+        for (uint16_t j = (i > 0) ? i - 1 : 0; j > 0 ; --j){
             uint16_t out_val = UINT16_MAX;
             hm_get(hmap, j, out_val);
             TEST_INT_EQ(hm_err(hmap), ds_success);
