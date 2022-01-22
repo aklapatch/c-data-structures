@@ -6,6 +6,8 @@
 // tombstone (empty) marker
 #define DEX_TS (UINT32_MAX)
 
+#define KEY_TS (UINTPTR_MAX)
+
 #define PROBE_STEP (GROUP_SIZE)
 
 // keep as a pow2, a for loop uses this -1 as a mask
@@ -194,15 +196,15 @@ static uintptr_t key_find_helper(
     if (dex_slot_out != NULL) { *dex_slot_out = UINTPTR_MAX; }
 
     uint8_t i = 0;
-    uintptr_t hash = hash_fn(key), truncated_hashes[PROBE_TRIES]; // save the hashes for the value search loop
+    uintptr_t hash = hash_fn(key), truncated_hash; // save the hashes for the value search loop
     uintptr_t step = PROBE_STEP;
     uintptr_t cap_mask = hm_cap(ptr) - 1;
     for (; i < PROBE_TRIES; ++i){
         // use hash first time, quadratic probe every other time
-        truncated_hashes[i] = hash & cap_mask;
+        truncated_hash = hash & cap_mask;
 
         uintptr_t bucket_i; uint8_t key_i;
-        one_i_to_bucket_is(truncated_hashes[i], bucket_i, key_i);
+        one_i_to_bucket_is(truncated_hash , bucket_i, key_i);
         hash_bucket *bucket = buckets + bucket_i;
         uintptr_t *keys = bucket->keys;
         uint32_t *val_i = bucket->val_i;
@@ -230,7 +232,7 @@ static uintptr_t key_find_helper(
                 }
             }
         }
-        hash = truncated_hashes[i] + step;
+        hash = truncated_hash + step;
         step += PROBE_STEP;
     }
     if (i == PROBE_TRIES || key_ret_i == UINTPTR_MAX){ return UINTPTR_MAX; }
@@ -426,6 +428,12 @@ void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
 #pragma message("Please init the hmap with hmap_init() or include stdlib.h to use default initialization with realloc!")
         return NULL;
 #endif
+    }
+
+    // don't allow keys of UINTPTR_MAX since that is the key tombstone value
+    if (key == KEY_TS){
+        hm_set_err(ptr, ds_bad_param);
+        return ptr;
     }
 
     // init the ptr if necessary
