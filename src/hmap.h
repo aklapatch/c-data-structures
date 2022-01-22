@@ -112,47 +112,6 @@ void _hm_free(void * ptr, realloc_fn_t realloc_fn){
 
 #define hm_free(ptr) _hm_free(ptr, hm_realloc_fn(ptr)),ptr=NULL
 
-bool hm_slot_empty(uintptr_t index){
-    return index == DEX_TS;
-}
-
-bool hm_val_empty(uint8_t val_meta, uint8_t slot_num){
-    uint8_t mask = 1 << slot_num;
-    return (mask & val_meta) == 0;
-}
-
-// return UINT8_MAX on error
-uint8_t hm_val_meta_to_open_i(uint8_t input){
-    // a zero bit means the slot's open
-    if (input == UINT8_MAX) { return UINT8_MAX; }
-    uint8_t slot_i = 0;
-    for (; (input & 1) == 1; input >>= 1,++slot_i){ }
-
-    return slot_i;
-}
-
-uint8_t highest_set_bit(uint8_t n){
-    n |= (n >> 1);
-    n |= (n >> 2);
-    n |= (n >> 4);
-    return n - (n >> 1);
-}
-
-uint8_t highest_set_bit_i(uint8_t input){
-    uint8_t top_bit_set = highest_set_bit(input);
-    uint8_t ret = 0;
-    if (top_bit_set == 0) return 0;
-
-    for (; (top_bit_set & 1) == 0; top_bit_set>>=1,++ret){ }
-
-    return ret;
-}
-
-
-bool hm_val_slot_open(uint8_t val_meta){
-    return val_meta < UINT8_MAX;
-}
-
 uintptr_t next_pow2(uintptr_t input){
     input--;
     input |= input >> 1;
@@ -163,10 +122,6 @@ uintptr_t next_pow2(uintptr_t input){
     input |= input >> 32;
     input++;
     return input;
-}
-
-uintptr_t truncate_to_cap(void* ptr, uintptr_t num){
-    return num & (hm_cap(ptr) - 1);
 }
 
 // This function is used for
