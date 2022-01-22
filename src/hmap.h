@@ -3,9 +3,6 @@
 #include "dynarr.h"
 #include "bit_setting.h"
 
-// tombstone (empty) marker
-#define DEX_TS (UINT32_MAX)
-
 #define KEY_TS (UINTPTR_MAX)
 
 #define PROBE_STEP (GROUP_SIZE)
@@ -172,15 +169,14 @@ static uintptr_t key_find_helper(
                 // the slot_meta array is not a bucket
                 // search the bucket and see if we can insert
                 // look for the key
-                if (val_i[j] == DEX_TS){
+                if (keys[j] == KEY_TS){
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     goto val_search;
                 }
             } else {
                 // search the bucket and see if we can insert
                 // look for the key
-                if (keys[j] == key && 
-                    val_i[j] != DEX_TS){
+                if (keys[j] == key && key != KEY_TS){
                     if (dex_slot_out != NULL) { *dex_slot_out = val_i[j]; }
                     bucket_is_to_one_i(key_ret_i, bucket_i, j);
                     return key_ret_i;
@@ -286,11 +282,10 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
     inf_ptr->buckets = bucket_ptr;
     inf_ptr->cap = new_cap;
 
-
-    // set the new meta to empty
+    // set the new keys
     for (uintptr_t i = 0; i < num_buckets; ++i){
         for (uint8_t j = 0; j < GROUP_SIZE; ++j){
-            inf_ptr->buckets[i].val_i[j] = DEX_TS;
+            inf_ptr->buckets[i].keys[j] = KEY_TS;
         }
     }
     ++inf_ptr;
@@ -304,7 +299,7 @@ void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uint
     // search the old key structure for keys
     for (uintptr_t bucket_i = 0; bucket_i < old_num_buckets; ++bucket_i){
         for (uint8_t i = 0; i < GROUP_SIZE; ++i){
-            if (old_bucket_ptr[bucket_i].val_i[i] != DEX_TS){
+            if (old_bucket_ptr[bucket_i].keys[i] != KEY_TS){
                 uintptr_t key = old_bucket_ptr[bucket_i].keys[i];
                 uint32_t dex = old_bucket_ptr[bucket_i].val_i[i];
                 uintptr_t ret = insert_key_and_dex(
@@ -359,7 +354,7 @@ uintptr_t hm_raw_insert_key(
 
     hash_bucket *buckets = hm_bucket_ptr(ptr);
     // only increment the num if we are not replacing a key
-    if (buckets[bucket_i].val_i[key_i] == DEX_TS){
+    if (buckets[bucket_i].keys[key_i] == KEY_TS){
         hm_info_ptr(ptr)->num++;
         // set that the slot is taken
     }
@@ -476,7 +471,7 @@ uintptr_t _hm_del(void *ptr, uintptr_t key){
     // the del macro should move the end val_i to the spot we just deleted
     uintptr_t bucket_i; uint8_t key_i;
     one_i_to_bucket_is(key_dex, bucket_i, key_i);
-    buckets[bucket_i].val_i[key_i] = DEX_TS;
+    buckets[bucket_i].keys[key_i] = KEY_TS;
 
     // only move the val slot if the val slot is not the last slot
     if (val_dex != hm_num(ptr)){
