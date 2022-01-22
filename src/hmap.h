@@ -71,7 +71,7 @@ uintptr_t hm_num(void * ptr){
 }
 
 bool should_grow(void *ptr){
-    uintptr_t target_thresh = (hm_cap(ptr)*12)/16;
+    uintptr_t target_thresh = (hm_cap(ptr)*14)/16;
     return hm_num(ptr) >= target_thresh;
 }
 
