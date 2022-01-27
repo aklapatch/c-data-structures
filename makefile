@@ -51,7 +51,6 @@ hmap_bench: src/hmap.h src/hmap_bench.c src/test_helpers.h
 	$(CC) $(PROFILE_CFLAGS) src/hmap_bench.c -o $(OUTDIR)/hmap_bench
 	git rev-parse --short HEAD > hmap_bench.txt
 	cat /proc/cpuinfo | grep name | uniq >> hmap_bench.txt
-	$(OUTDIR)/hmap_bench >> hmap_bench.txt
-	cat hmap_bench.txt
+	$(OUTDIR)/hmap_bench | tee -a hmap_bench.txt
 
 tests: dynarr_test hmap_test  hash_test

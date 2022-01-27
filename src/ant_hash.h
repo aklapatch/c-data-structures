@@ -1,4 +1,5 @@
 #pragma once
+#include "misc.h"
 #include <stdint.h> // if you're not using stdint, you're missing out
 
 // The hash table that takes keys only really needs to hash one uintptr_t at a time.
@@ -14,10 +15,10 @@
 // multiplying by the same value twice seems to help speed, probably since the value can be
 // saved in the same register
 uintptr_t ant_hash(uintptr_t in){
-    const uint8_t shift_amt = sizeof(in)*2;
+    const uint8_t shift_amt = sizeof(in)*3;
     const uintptr_t prime1 = 22468225119U;
     in ^= in >> shift_amt;
     in ^= in >> shift_amt;
-    in *= prime1;
-    return in * prime1;
+    in ^= prime1;
+    return in * prime1 * prime1;
 }
