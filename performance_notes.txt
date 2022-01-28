@@ -59,10 +59,13 @@ UINTPTR_MAX seems like a reasonable key to reject. It does not make
 things any faster, but it seems to make them simpler, which is fine.
 
 Making the hash table keys, vals, and keys_i, into their own arrays, and that
-doesn't seem to make things any faster. It simplifies converting between
+doesn't seem to make things any faster (it may make things slower at
+peak performance). It simplifies converting between
 indices, but makes error handling for memory allocation more
 compilcated.
 
 One more thing I want to try is storing the hash code in a uint16_t, and
 also using the uint16_t as a sentinel value to see if the key slot is
 open or not.
+I tried the above paragraph, and that slowed down queries and did
+nothing for insertions.
