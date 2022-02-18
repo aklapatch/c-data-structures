@@ -67,6 +67,13 @@ bool should_grow(void *ptr){
     return hm_num(ptr) >= target_thresh;
 }
 
+// once we get below the should_grow threshold for the next power of 2 don, then shrink
+bool should_shrink(void *ptr){
+    uintptr_t lower_pow2 = hm_cap(ptr)/2;
+    uintptr_t threshold = (lower_pow2*14)/16;
+    return hm_num(ptr) < threshold;
+}
+
 void hm_set_err(void * ptr, ds_error_e err){
     if (ptr != NULL){
         hm_info_ptr(ptr)->err = err;
@@ -219,21 +226,22 @@ static uintptr_t insert_key_and_dex(void *ptr, uintptr_t key, uint32_t dex){
 }
 
 // handle both the init and growing case, but not shrinking yet.
-void *hm_raw_grow(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
+void *hm_raw_realloc(void * ptr, realloc_fn_t realloc_fn, hash_fn_t hash_func, uintptr_t item_count, uintptr_t item_size){
 
     uint8_t greater_size = (GROUP_SIZE > 8) ? GROUP_SIZE : 8;
     item_count = (item_count < 2*greater_size) ? 2*greater_size : item_count;
-
-    // shrinking is not implemented yet
-    if (item_count < hm_cap(ptr)){
-        return ptr;
-    }
 
     // should be null safe, base_ptr will be null if ptr is null
     hm_info *base_ptr = hm_info_ptr(ptr);
 
     uintptr_t old_cap = hm_cap(ptr);
     uintptr_t new_cap = next_pow2(item_count);
+    
+    // bail if we have too many items to shrink
+    if (hm_num(ptr) > new_cap){
+        hm_set_err(ptr, ds_bad_param);
+        return ptr;
+    }
 
     uintptr_t data_size = new_cap*item_size + sizeof(hm_info);
 
@@ -336,8 +344,8 @@ done:
     return inf_ptr;
 }
 
-#define hm_grow(ptr, new_cap) ptr = hm_raw_grow(ptr, hm_realloc_fn(ptr), hm_hash_func(ptr), new_cap, sizeof(*ptr))
-#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_raw_grow(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
+#define hm_realloc(ptr, new_cap) ptr = hm_raw_realloc(ptr, hm_realloc_fn(ptr), hm_hash_func(ptr), new_cap, sizeof(*ptr))
+#define hm_init(ptr, num_items, realloc_fn, hash_func) ptr = hm_raw_realloc(NULL, realloc_fn, hash_func, num_items, sizeof(*ptr))
 
 // returns the value index
 // sets the key slot found
@@ -377,7 +385,7 @@ uintptr_t hm_raw_insert_key(
 void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
     if (ptr == NULL){
 #ifdef _STDLIB_H
-        ptr = hm_raw_grow(ptr, realloc, ant_hash, 16, item_size);
+        ptr = hm_raw_realloc(ptr, realloc, ant_hash, 16, item_size);
 #else
 #pragma message("Please init the hmap with hmap_init() or include stdlib.h to use default initialization with realloc!")
         return NULL;
@@ -403,7 +411,7 @@ void *hm_try_insert(void *ptr, uintptr_t key, size_t item_size){
                 return ptr;
             }
         }
-        ptr = hm_raw_grow(
+        ptr = hm_raw_realloc(
             ptr,
             hm_realloc_fn(ptr),
             hm_hash_func(ptr),
@@ -451,10 +459,6 @@ static uintptr_t hm_find_val_i(void *ptr, uintptr_t key){
         }\
     } while(0)
 
-// TODO: STB just puts the newest element at the end of the array and memmoves 
-// an old element over the removed one. Implement that so we can get rid of val_meta
-// We don't need to really worry about it right now since queries are about as
-// fast as STB's
 uintptr_t _hm_del(void *ptr, uintptr_t key){
 
     uintptr_t val_dex, key_dex = key_find_helper(
@@ -500,5 +504,7 @@ uintptr_t _hm_del(void *ptr, uintptr_t key){
         if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX && \
             hm_info_ptr(ptr)->tmp_val_i < hm_num(ptr)){\
             ptr[hm_info_ptr(ptr)->tmp_val_i] = ptr[hm_num(ptr)];\
+        } else if (hm_info_ptr(ptr)->tmp_val_i != UINTPTR_MAX && should_shrink(ptr)){\
+            ptr = hm_realloc(ptr, hm_cap(ptr)/2 - 1);\
         }\
     } while(0)

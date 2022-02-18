@@ -38,7 +38,7 @@ int main(){
     TEST_GROUP_OK();
 
     TEST_GROUP("Realloc key preservation");
-    hm_grow(hmap, 64);
+    hm_realloc(hmap, 64);
     // try resizing the hmap and see if all the key are still there
     for (uint16_t i = 0; i < NUM_KEYS; ++i){
         uint16_t out_val = UINT16_MAX;
