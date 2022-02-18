@@ -9,7 +9,7 @@
 #define PROBE_STEP (GROUP_SIZE)
 
 // keep as a pow2, a for loop uses this -1 as a mask
-#define GROUP_SIZE (8)
+#define GROUP_SIZE (4)
 
 #define GROUP_MASK (GROUP_SIZE - 1)
 
