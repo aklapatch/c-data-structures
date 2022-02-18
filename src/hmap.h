@@ -1,8 +1,8 @@
 #pragma once
 #include "ant_hash.h"
-#include "dynarr.h"
-#include "bit_setting.h"
+#include "ds_common.h"
 #include "misc.h"
+#include <stdbool.h>
 
 #define KEY_TS (UINTPTR_MAX)
 
@@ -109,18 +109,6 @@ void _hm_free(void * ptr, realloc_fn_t realloc_fn){
 }
 
 #define hm_free(ptr) _hm_free(ptr, hm_realloc_fn(ptr)),ptr=NULL
-
-uintptr_t next_pow2(uintptr_t input){
-    input--;
-    input |= input >> 1;
-    input |= input >> 2;
-    input |= input >> 4;
-    input |= input >> 8;
-    input |= input >> 16;
-    input |= input >> 32;
-    input++;
-    return input;
-}
 
 // This function is used for
 // - finding a key slot
