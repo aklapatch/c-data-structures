@@ -1,16 +1,13 @@
 
 #pragma once
 #include <stdint.h>
+#include "misc.h"
 
 // inspired by create.stephan-brumme.com/xxhash/#sourcecode
 //
 // Use uintptr_t so that on a 64bit arch it's xxhash 64, and on a 32 bit arch it's xxhahs32
 
 #define XXHASH_SEED_1 (0x31415926)
-
-uintptr_t rot_left(uintptr_t n, uint8_t num){
-    return (n << num) | (n >> ((sizeof(uintptr_t) * 8) - num));
-}
 
 uintptr_t xxhash_buf(void *data, size_t data_len){
     const uintptr_t primes[] = { 2654435761U, 22468225119U, 3266489917U, 668265263U, 374761393U};

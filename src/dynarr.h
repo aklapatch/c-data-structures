@@ -6,8 +6,6 @@
 #include<stdbool.h>
 #include"ds_common.h"
 
-typedef void *(*realloc_fn_t)(void *,size_t);
-
 typedef struct dynarr_inf{
     realloc_fn_t realloc_fn;
     uintptr_t num,cap;
